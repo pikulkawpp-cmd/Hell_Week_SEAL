@@ -1,10 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-<!-- ไอคอนแสดงบนแท็บเว็บไซต์ (Favicon) -->
-<link rel="icon" type="image/png" href="47-2.png">
-<!-- สำหรับรองรับอุปกรณ์ Apple / iOS -->
-<link rel="apple-touch-icon" href="47-2.png">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
@@ -20,13 +16,10 @@
 <div id="lock" class="lock">
   <form id="lockForm" class="lock-card" autocomplete="off">
     <div class="lock-mark">⚓</div>
-    <h1 id="lockTitle">ห้องครูฝึก</h1>
-    <p id="lockMsg">เฉพาะครูฝึกเท่านั้น กรอกรหัสผ่านเพื่อเข้าสู่ระบบ</p>
+    <h1>ห้องครูฝึก</h1>
+    <p>เฉพาะครูฝึกเท่านั้น กรอกรหัสผ่านเพื่อเข้าสู่ระบบ</p>
     <label>รหัสผ่าน
-      <input id="lockPass" type="password" required minlength="4" autofocus>
-    </label>
-    <label id="lockConfirmWrap" hidden>ยืนยันรหัสผ่าน
-      <input id="lockConfirm" type="password" minlength="4">
+      <input id="lockPass" type="password" inputmode="numeric" required autofocus>
     </label>
     <p class="lock-err" id="lockErr" role="alert"></p>
     <button class="btn primary wide" type="submit" id="lockBtn">เข้าสู่ระบบ</button>
@@ -47,6 +40,7 @@
       <button data-view="trainees">รายชื่อผู้เข้ารับการฝึก</button>
       <button data-view="settings">ตั้งค่า</button>
     </nav>
+    <span class="mode" id="modeBadge"></span>
     <button class="btn small logout" id="logoutBtn">ออกจากระบบ</button>
   </aside>
 
@@ -192,19 +186,17 @@
 
     <!-- ===== ตั้งค่า ===== -->
     <section class="view" id="v-settings" hidden>
-      <header class="page-head"><div><h2>ตั้งค่า</h2><p>รหัสผ่านและการจัดการข้อมูล</p></div></header>
+      <header class="page-head"><div><h2>ตั้งค่า</h2><p>โหมดการเก็บข้อมูลและการจัดการข้อมูล</p></div></header>
       <div class="settings">
-        <form id="passForm" class="panel" autocomplete="off">
-          <h3>เปลี่ยนรหัสผ่านครูฝึก</h3>
-          <label>รหัสผ่านเดิม<input id="oldPass" type="password" required></label>
-          <label>รหัสผ่านใหม่<input id="newPass" type="password" required minlength="4"></label>
-          <button class="btn primary" type="submit">เปลี่ยนรหัสผ่าน</button>
-        </form>
         <div class="panel">
-          <h3>พื้นที่เก็บข้อมูล</h3>
+          <h3>โหมดการเก็บข้อมูล</h3>
+          <p id="modeInfo"></p>
+        </div>
+        <div class="panel">
+          <h3>ปริมาณข้อมูล</h3>
           <p id="storageInfo"></p>
           <div class="progress"><div id="storageBar"></div></div>
-          <p class="sub small">เบราว์เซอร์เก็บได้ราว 5 MB ถ้าเต็มให้สำรอง JSON แล้วลบรายการเก่า</p>
+          <p class="sub small">โหมดเครื่องนี้เก็บได้ราว 5 MB ถ้าเต็มให้สำรอง JSON แล้วลบรายการเก่า</p>
           <button class="btn danger" id="wipeBtn">ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด</button>
         </div>
       </div>

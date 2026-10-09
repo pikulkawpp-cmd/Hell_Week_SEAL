@@ -112,7 +112,8 @@ const EXAM = [
 ];
 
 const STORE_KEY = 'hellweek_records_v1';
-const AUTH_KEY  = 'hellweek_auth_v1';
+const TOKEN_KEY = 'hellweek_token';
+const LOCAL_PASS = '0104';   // ใช้เฉพาะโหมดเปิดไฟล์ตรง ๆ (ไม่มีเซิร์ฟเวอร์)
 const SESSION_KEY = 'hellweek_session';
 
 /* ---------- 2) ตัวช่วย ---------- */
@@ -139,83 +140,131 @@ function gradeOf(total) {
   return { key: 'fail', text: 'ไม่ผ่านหลักสูตร', short: 'ไม่ผ่าน', color: '#e0544f', css: 'var(--red)' };
 }
 
-/* ---------- 3) ล็อกอินครูฝึก ----------
-   หมายเหตุ: เป็นการล็อกฝั่งเบราว์เซอร์เพื่อกันนักเรียนเข้าหน้านี้โดยไม่ตั้งใจ
-   ถ้าต้องการความปลอดภัยจริง ควรโฮสต์หลังระบบรหัสผ่านของเซิร์ฟเวอร์ */
-async function sha(text) {
-  if (window.crypto?.subtle) {
-    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
-  }
-  let h = 5381;
-  for (const c of text) h = ((h << 5) + h + c.charCodeAt(0)) >>> 0;
-  return 'x' + h;
+/* ---------- 3) ข้อมูลร่วมกันทุกเครื่อง + ล็อกอิน ----------
+   MODE 'server' = รันผ่าน server.js ทุกเครื่องเห็นข้อมูลชุดเดียวกัน
+   MODE 'local'  = เปิดไฟล์ตรง ๆ เก็บ localStorage เฉพาะเครื่องนี้ */
+let MODE = 'local';
+let TOKEN = sessionStorage.getItem(TOKEN_KEY) || '';
+let CACHE = load(STORE_KEY, []);
+let syncTimer = null, lastSig = '';
+
+const getRecords = () => CACHE;
+const sigOf = list => list.map(r => r.id + ':' + (r.updated || 0)).join('|');
+
+async function api(path, opt = {}) {
+  const res = await fetch('/api' + path, { ...opt, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN } });
+  if (res.status === 401) { logout(); throw new Error('401'); }
+  if (!res.ok) throw new Error(String(res.status));
+  return res.json();
 }
-const randSalt = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+async function pull() {
+  CACHE = await api('/records');
+  lastSig = sigOf(CACHE);
+}
+async function upsertRecords(recs) {
+  try {
+    if (MODE === 'server') { CACHE = await api('/records', { method: 'POST', body: JSON.stringify(recs) }); }
+    else {
+      const backup = CACHE;
+      const next = [...CACHE];
+      recs.forEach(r => { const i = next.findIndex(x => x.id === r.id); i >= 0 ? next[i] = r : next.unshift(r); });
+      CACHE = next;
+      if (!save(STORE_KEY, CACHE)) { CACHE = backup; return false; }
+    }
+    lastSig = sigOf(CACHE);
+    return true;
+  } catch { return false; }
+}
+async function deleteRecord(id) {
+  try {
+    if (MODE === 'server') CACHE = await api('/records/' + encodeURIComponent(id), { method: 'DELETE' });
+    else { CACHE = CACHE.filter(r => r.id != id); save(STORE_KEY, CACHE); }
+    lastSig = sigOf(CACHE);
+  } catch { toast('ลบไม่สำเร็จ'); }
+}
+async function wipeAll() {
+  try {
+    if (MODE === 'server') CACHE = await api('/records', { method: 'DELETE' });
+    else { CACHE = []; localStorage.removeItem(STORE_KEY); }
+    lastSig = '';
+  } catch { toast('ลบไม่สำเร็จ'); }
+}
+async function sync() {
+  if (MODE !== 'server' || document.hidden) return;
+  try {
+    const list = await api('/records');
+    const sig = sigOf(list);
+    if (sig === lastSig) return;
+    CACHE = list; lastSig = sig;
+    const v = $$('.view').find(x => !x.hidden)?.id;
+    if (v === 'v-dashboard') renderDashboard();
+    if (v === 'v-trainees') renderRecords();
+    if (v === 'v-settings') renderStorage();
+  } catch {}
+}
 
 let fails = 0, lockedUntil = 0;
-
-function setupLock() {
-  const auth = load(AUTH_KEY, null);
-  const first = !auth;
-  $('#lockTitle').textContent = first ? 'ตั้งรหัสผ่านครูฝึก' : 'ห้องครูฝึก';
-  $('#lockMsg').textContent = first ? 'ใช้งานครั้งแรก ตั้งรหัสผ่านเพื่อกันผู้เข้ารับการฝึกเข้าหน้านี้' : 'เฉพาะครูฝึกเท่านั้น กรอกรหัสผ่านเพื่อเข้าสู่ระบบ';
-  $('#lockConfirmWrap').hidden = !first;
-  $('#lockConfirm').required = first;
-  $('#lockBtn').textContent = first ? 'ตั้งรหัสผ่านและเข้าสู่ระบบ' : 'เข้าสู่ระบบ';
-  $('#lockPass').value = ''; $('#lockConfirm').value = '';
-}
+const showWrong = () => {
+  fails++;
+  if (fails >= 3) { lockedUntil = Date.now() + 15000; fails = 0; $('#lockErr').textContent = 'ลองผิด 3 ครั้ง ระบบล็อก 15 วินาที'; }
+  else $('#lockErr').textContent = 'รหัสผ่านไม่ถูกต้อง';
+  $('#lockPass').select();
+};
 
 async function onLogin(e) {
   e.preventDefault();
-  const err = $('#lockErr');
-  err.textContent = '';
+  $('#lockErr').textContent = '';
   const pass = $('#lockPass').value;
-  const auth = load(AUTH_KEY, null);
+  if (Date.now() < lockedUntil) { $('#lockErr').textContent = `ลองผิดหลายครั้ง รออีก ${Math.ceil((lockedUntil - Date.now()) / 1000)} วินาที`; return; }
 
-  if (!auth) {
-    if (pass.length < 4) { err.textContent = 'รหัสผ่านต้องยาวอย่างน้อย 4 ตัวอักษร'; return; }
-    if (pass !== $('#lockConfirm').value) { err.textContent = 'รหัสผ่านสองช่องไม่ตรงกัน'; return; }
-    const salt = randSalt();
-    save(AUTH_KEY, { salt, hash: await sha(salt + pass) });
+  let res = null;
+  try { res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass }) }); } catch {}
+
+  if (res && res.ok) {
+    TOKEN = (await res.json()).token;
+    sessionStorage.setItem(TOKEN_KEY, TOKEN);
+    MODE = 'server';
+    try { await pull(); } catch { $('#lockErr').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'; return; }
     return enterApp();
   }
-  if (Date.now() < lockedUntil) {
-    err.textContent = `ลองผิดหลายครั้ง รออีก ${Math.ceil((lockedUntil - Date.now()) / 1000)} วินาที`;
-    return;
-  }
-  if (await sha(auth.salt + pass) === auth.hash) { fails = 0; return enterApp(); }
-  fails++;
-  if (fails >= 3) { lockedUntil = Date.now() + 15000; fails = 0; err.textContent = 'ลองผิด 3 ครั้ง ระบบล็อก 15 วินาที'; }
-  else err.textContent = 'รหัสผ่านไม่ถูกต้อง';
-  $('#lockPass').select();
+  if (res && res.status === 401) return showWrong();
+  if (res && res.status === 429) { $('#lockErr').textContent = 'ลองผิดหลายครั้ง รอ 1 นาทีแล้วลองใหม่'; return; }
+  // ไม่มีเซิร์ฟเวอร์ → โหมดเครื่องนี้
+  if (pass !== LOCAL_PASS) return showWrong();
+  MODE = 'local';
+  CACHE = load(STORE_KEY, []);
+  enterApp();
 }
 
 function enterApp() {
   sessionStorage.setItem(SESSION_KEY, '1');
   document.body.classList.remove('locked');
   $('#app').hidden = false;
+  $('#modeBadge').className = 'mode ' + MODE;
+  $('#modeBadge').textContent = MODE === 'server' ? 'ข้อมูลร่วมทุกเครื่อง' : 'เก็บเฉพาะเครื่องนี้';
+  $('#modeInfo').textContent = MODE === 'server'
+    ? 'เชื่อมต่อเซิร์ฟเวอร์แล้ว ครูฝึกทุกคนที่ล็อกอินจะเห็นและแก้ไขข้อมูลชุดเดียวกัน อัปเดตอัตโนมัติทุก 10 วินาที'
+    : 'ไม่ได้เชื่อมต่อเซิร์ฟเวอร์ ข้อมูลเก็บใน localStorage ของเครื่องนี้เท่านั้น หากต้องการให้ทุกเครื่องเห็นข้อมูลร่วมกัน ให้รัน node server.js แล้วเปิดผ่านที่อยู่ของเซิร์ฟเวอร์';
   if (!enterApp.done) { initApp(); enterApp.done = true; }
+  clearInterval(syncTimer);
+  if (MODE === 'server') syncTimer = setInterval(sync, 10000);
   show(location.hash.slice(1) || 'dashboard');
 }
 function logout() {
   sessionStorage.removeItem(SESSION_KEY);
+  sessionStorage.removeItem(TOKEN_KEY);
+  TOKEN = '';
+  clearInterval(syncTimer);
   location.hash = '';
   document.body.classList.add('locked');
   $('#app').hidden = true;
-  setupLock();
+  $('#lockPass').value = '';
+  $('#lockErr').textContent = '';
 }
-
-async function changePass(e) {
-  e.preventDefault();
-  const auth = load(AUTH_KEY, null);
-  if (!auth || await sha(auth.salt + $('#oldPass').value) !== auth.hash) { toast('รหัสผ่านเดิมไม่ถูกต้อง'); return; }
-  const np = $('#newPass').value;
-  if (np.length < 4) { toast('รหัสผ่านใหม่ต้องยาวอย่างน้อย 4 ตัวอักษร'); return; }
-  const salt = randSalt();
-  save(AUTH_KEY, { salt, hash: await sha(salt + np) });
-  $('#passForm').reset();
-  toast('เปลี่ยนรหัสผ่านแล้ว');
+async function resume() {
+  if (sessionStorage.getItem(SESSION_KEY) !== '1') return;
+  if (TOKEN) { try { MODE = 'server'; await pull(); return enterApp(); } catch { MODE = 'local'; } }
+  if (!TOKEN) { MODE = 'local'; CACHE = load(STORE_KEY, []); enterApp(); }
 }
 
 /* ---------- 4) หน้าต่าง ๆ ---------- */
@@ -231,7 +280,7 @@ function show(view) {
 }
 
 function renderDashboard() {
-  const list = load(STORE_KEY, []);
+  const list = getRecords();
   const c = { pass: 0, wait: 0, fail: 0 };
   list.forEach(r => c[gradeOf(r.scores.total).key]++);
   const avg = list.length ? round1(list.reduce((a, r) => a + r.scores.total, 0) / list.length) : 0;
@@ -299,6 +348,7 @@ function buildForm() {
     <div class="irow"><div class="nm">การทำงานเป็นทีม<small>ช่วยเพื่อน สื่อสาร แบ่งหน้าที่</small></div>
       <input type="number" min="0" max="10" step="0.5" id="dc-team" placeholder="0–10"><div class="sc">/10</div></div>`;
   $('#trainDate').valueAsDate = new Date();
+  try { $('#trainerName').value = localStorage.getItem('hw_trainer') || ''; } catch {}
   $$('#form input[type=number]').forEach(i => i.addEventListener('input', recalc));
 }
 
@@ -435,19 +485,19 @@ function resetForm() {
   $('#recordTitle').textContent = 'บันทึกผลการฝึก';
   $('#form').reset();
   $('#trainDate').valueAsDate = new Date();
+  try { $('#trainerName').value = localStorage.getItem('hw_trainer') || ''; } catch {}
   photos = [];
   renderThumbs();
   recalc();
 }
 
-function onSubmit(e) {
+async function onSubmit(e) {
   e.preventDefault();
   const rec = collectRecord();
   if (!rec.name) { toast('กรอกชื่อ Roblox ก่อน'); return; }
-  const list = load(STORE_KEY, []);
-  const idx = list.findIndex(x => x.id === rec.id);
-  idx >= 0 ? list[idx] = rec : list.unshift(rec);
-  if (!save(STORE_KEY, list)) { toast('พื้นที่เก็บข้อมูลเต็ม ลองลบรูปหรือสำรอง JSON ก่อน'); return; }
+  rec.updated = Date.now();
+  if (!(await upsertRecords([rec]))) { toast(MODE === 'server' ? 'บันทึกไม่สำเร็จ ตรวจการเชื่อมต่อเซิร์ฟเวอร์' : 'พื้นที่เก็บข้อมูลเต็ม ลองลบรูปหรือสำรอง JSON ก่อน'); return; }
+  try { localStorage.setItem('hw_trainer', rec.trainer); } catch {}
   toast(`บันทึกผลของ ${rec.name} แล้ว`);
   resetForm();
   show('trainees');
@@ -457,7 +507,7 @@ function onSubmit(e) {
 function renderRecords() {
   const q = $('#search').value.trim().toLowerCase();
   const gf = $('#filterGrade').value;
-  const list = load(STORE_KEY, []).filter(r => r.name.toLowerCase().includes(q) && (!gf || gradeOf(r.scores.total).key === gf));
+  const list = getRecords().filter(r => r.name.toLowerCase().includes(q) && (!gf || gradeOf(r.scores.total).key === gf));
   $('#recordBody').innerHTML = list.length ? list.map(r => {
     const g = gradeOf(r.scores.total);
     return `<tr><td>${esc(r.name)}</td><td>${esc(r.trainer || '-')}</td><td>${esc(r.date || '-')}</td>
@@ -468,8 +518,8 @@ function renderRecords() {
         <button class="btn small" data-rm="${r.id}">ลบ</button></div></td></tr>`;
   }).join('') : `<tr><td class="empty" colspan="7">ไม่พบรายการ</td></tr>`;
 }
-function onTableClick(e) {
-  const list = load(STORE_KEY, []);
+async function onTableClick(e) {
+  const list = getRecords();
   const find = id => list.find(x => x.id == id);
   if (e.target.dataset.img) { const r = find(e.target.dataset.img); if (r) showReport(r); }
   if (e.target.dataset.edit) {
@@ -478,7 +528,7 @@ function onTableClick(e) {
   }
   if (e.target.dataset.rm) {
     const r = find(e.target.dataset.rm);
-    if (r && confirm(`ลบผลของ ${r.name}?`)) { save(STORE_KEY, list.filter(x => x.id != r.id)); renderRecords(); }
+    if (r && confirm(`ลบผลของ ${r.name}?`)) { await deleteRecord(r.id); renderRecords(); }
   }
 }
 
@@ -490,7 +540,7 @@ function download(name, text, type) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function exportCSV() {
-  const list = load(STORE_KEY, []);
+  const list = getRecords();
   if (!list.length) return toast('ยังไม่มีข้อมูล');
   const head = ['ชื่อ Roblox', 'ครูฝึก', 'วันที่', 'กายภาพ/50', 'วิชาการ/30', 'วินัยและทีม/20', 'รวม/100', 'ผล', 'หมายเหตุ'];
   const rows = list.map(r => [r.name, r.trainer, r.date, r.scores.phys, r.scores.acad, r.scores.disc, r.scores.total, gradeOf(r.scores.total).text, r.notes]);
@@ -499,15 +549,14 @@ function exportCSV() {
 }
 function importJSON(file) {
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const incoming = JSON.parse(reader.result);
       if (!Array.isArray(incoming)) throw new Error();
-      const map = new Map(load(STORE_KEY, []).map(r => [r.id, r]));
-      incoming.forEach(r => r && r.id && r.name && r.scores && map.set(r.id, r));
-      save(STORE_KEY, [...map.values()]);
+      const valid = incoming.filter(r => r && r.id && r.name && r.scores);
+      if (!valid.length || !(await upsertRecords(valid))) throw new Error();
       renderRecords();
-      toast('นำเข้าข้อมูลแล้ว');
+      toast(`นำเข้าข้อมูล ${valid.length} รายการแล้ว`);
     } catch { toast('ไฟล์ไม่ถูกต้อง'); }
   };
   reader.readAsText(file);
@@ -528,15 +577,18 @@ function copyDiscord() {
 
 /* ตั้งค่า */
 function renderStorage() {
-  const bytes = (localStorage.getItem(STORE_KEY) || '').length * 2;
-  const mb = bytes / 1048576;
-  $('#storageInfo').textContent = `ใช้ไปประมาณ ${mb.toFixed(2)} MB จากราว 5 MB (${load(STORE_KEY, []).length} รายการ)`;
-  $('#storageBar').style.width = clamp(mb / 5 * 100, 0, 100) + '%';
-  $('#storageBar').style.background = mb > 4 ? 'var(--red)' : 'var(--teal)';
+  const list = getRecords();
+  const mb = JSON.stringify(list).length * 2 / 1048576;
+  $('#storageInfo').textContent = MODE === 'server'
+    ? `ข้อมูลบนเซิร์ฟเวอร์ ${list.length} รายการ (ประมาณ ${mb.toFixed(2)} MB)`
+    : `ใช้ไปประมาณ ${mb.toFixed(2)} MB จากราว 5 MB (${list.length} รายการ)`;
+  $('#storageBar').style.width = (MODE === 'server' ? Math.min(mb / 50 * 100, 100) : Math.min(mb / 5 * 100, 100)) + '%';
+  $('#storageBar').style.background = MODE === 'local' && mb > 4 ? 'var(--red)' : 'var(--teal)';
 }
-function wipe() {
-  if (confirm('ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด? ย้อนกลับไม่ได้ (รหัสผ่านจะไม่ถูกลบ)') && confirm('ยืนยันอีกครั้ง ลบทั้งหมดจริงหรือไม่?')) {
-    localStorage.removeItem(STORE_KEY);
+async function wipe() {
+  const warn = MODE === 'server' ? 'ลบข้อมูลผู้เข้ารับการฝึก "ของทุกเครื่อง" ทั้งหมด? ย้อนกลับไม่ได้' : 'ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด? ย้อนกลับไม่ได้';
+  if (confirm(warn) && confirm('ยืนยันอีกครั้ง ลบทั้งหมดจริงหรือไม่?')) {
+    await wipeAll();
     renderStorage();
     toast('ลบข้อมูลทั้งหมดแล้ว');
   }
@@ -710,13 +762,11 @@ function initApp() {
   $('#filterGrade').addEventListener('change', renderRecords);
   $('#recordBody').addEventListener('click', onTableClick);
   $('#csvBtn').addEventListener('click', exportCSV);
-  $('#jsonBtn').addEventListener('click', () => download('hellweek-backup.json', JSON.stringify(load(STORE_KEY, [])), 'application/json'));
+  $('#jsonBtn').addEventListener('click', () => download('hellweek-backup.json', JSON.stringify(getRecords()), 'application/json'));
   $('#importInput').addEventListener('change', e => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; });
-  $('#passForm').addEventListener('submit', changePass);
   $('#wipeBtn').addEventListener('click', wipe);
   window.addEventListener('hashchange', () => { if (!document.body.classList.contains('locked')) show(location.hash.slice(1)); });
 }
 
 $('#lockForm').addEventListener('submit', onLogin);
-setupLock();
-if (sessionStorage.getItem(SESSION_KEY) === '1' && load(AUTH_KEY, null)) enterApp();
+resume();
