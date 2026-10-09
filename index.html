@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <!-- ไอคอนแสดงบนแท็บเว็บไซต์ (Favicon) -->
+    <link rel="icon" type="image/png" href="33.png">
+    <!-- สำหรับรองรับอุปกรณ์ Apple / iOS -->
+    <link rel="apple-touch-icon" href="33.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>ห้องครูฝึก | Hell Week SEAL</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;600;800&family=Sarabun:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  </head>
+<body class="locked">
+
+<!-- ========== หน้าล็อกอินครูฝึก ========== -->
+<div id="lock" class="lock">
+  <form id="lockForm" class="lock-card" autocomplete="off">
+    <div class="lock-mark">⚓</div>
+    <h1 id="lockTitle">ห้องครูฝึก</h1>
+    <p id="lockMsg">เฉพาะครูฝึกเท่านั้น กรอกรหัสผ่านเพื่อเข้าสู่ระบบ</p>
+    <label>รหัสผ่าน
+      <input id="lockPass" type="password" required minlength="4" autofocus>
+    </label>
+    <label id="lockConfirmWrap" hidden>ยืนยันรหัสผ่าน
+      <input id="lockConfirm" type="password" minlength="4">
+    </label>
+    <p class="lock-err" id="lockErr" role="alert"></p>
+    <button class="btn primary wide" type="submit" id="lockBtn">เข้าสู่ระบบ</button>
+  </form>
+</div>
+
+<!-- ========== ระบบครูฝึก ========== -->
+<div id="app" class="app" hidden>
+  <aside class="side">
+    <div class="side-brand">
+      <span class="mark">⚓</span>
+      <div><b>HELL WEEK</b><small>ห้องครูฝึก SEAL</small></div>
+    </div>
+    <nav id="nav">
+      <button data-view="dashboard" class="active">ภาพรวม</button>
+      <button data-view="course">หลักสูตร</button>
+      <button data-view="record">บันทึกผลการฝึก</button>
+      <button data-view="trainees">รายชื่อผู้เข้ารับการฝึก</button>
+      <button data-view="settings">ตั้งค่า</button>
+    </nav>
+    <button class="btn small logout" id="logoutBtn">ออกจากระบบ</button>
+  </aside>
+
+  <main class="content">
+
+    <!-- ===== ภาพรวม ===== -->
+    <section class="view" id="v-dashboard">
+      <header class="page-head">
+        <div><h2>ภาพรวมการฝึก</h2><p>สรุปผลผู้เข้ารับการฝึกทั้งหมดที่บันทึกไว้ในเครื่องนี้</p></div>
+        <button class="btn primary" data-go="record">บันทึกผลใหม่</button>
+      </header>
+      <div class="stats" id="stats"></div>
+      <div class="split-bar" id="splitBar" aria-hidden="true"></div>
+      <h3>บันทึกล่าสุด</h3>
+      <div class="recent" id="recentList"></div>
+    </section>
+
+    <!-- ===== หลักสูตร ===== -->
+    <section class="view" id="v-course" hidden>
+      <header class="page-head"><div><h2>คู่มือหลักสูตร Hell Week</h2><p>ใช้อ้างอิงขณะสอนและให้คะแนน</p></div></header>
+      <div class="tabs" id="courseTabs">
+        <button data-tab="physical" class="active">หมวดกายภาพ</button>
+        <button data-tab="academic">หมวดวิชาการ</button>
+        <button data-tab="grading">เกณฑ์ผ่าน</button>
+        <button data-tab="exam">คลังข้อสอบพร้อมเฉลย</button>
+      </div>
+
+      <div class="pane" id="tab-physical">
+        <p class="sub">7 ด่าน รวม 50 คะแนน ครูฝึกนับและบันทึกผลเอง</p>
+        <div class="stations" id="stationGrid"></div>
+        <p class="note">หมายเหตุ: จำนวนครั้งเป็นข้อกำหนดของหลักสูตรในเกม ไม่ใช่เกณฑ์ความปลอดภัยสำหรับการฝึกร่างกายจริง หากนำไปใช้กับผู้เล่นจริง ควรแบ่งเป็นช่วง มีเวลาพัก และให้หยุดได้เมื่อไม่พร้อม</p>
+      </div>
+
+      <div class="pane" id="tab-academic" hidden>
+        <p class="sub">6 วิชา วิชาละ 5 คะแนน รวม 30 คะแนน</p>
+        <div id="subjectList"></div>
+        <h3>คำศัพท์วิทยุมาตรฐาน</h3>
+        <div class="glossary" id="glossary"></div>
+      </div>
+
+      <div class="pane" id="tab-grading" hidden>
+        <div class="score-split">
+          <div style="--w:50"><b>50</b><span>กายภาพและด่านภาคปฏิบัติ</span></div>
+          <div style="--w:30"><b>30</b><span>วิชาการ</span></div>
+          <div style="--w:20"><b>20</b><span>วินัยและทีม</span></div>
+        </div>
+        <div class="grades">
+          <div class="g pass"><b>80–100</b>ผ่านหลักสูตร Hell Week</div>
+          <div class="g wait"><b>60–79</b>รอประเมินซ้ำ</div>
+          <div class="g fail"><b>ต่ำกว่า 60</b>ไม่ผ่านหลักสูตร</div>
+        </div>
+        <p class="note">ผู้ที่ไม่ผ่าน ครูฝึกต้องแจ้งผลพร้อมเหตุผลและแนวทางแก้ไข ระบบจะแนะนำจุดที่ควรเสริมในหน้าบันทึกผลให้อัตโนมัติ</p>
+      </div>
+
+      <div class="pane" id="tab-exam" hidden>
+        <p class="sub">ข้อสอบปากเปล่า/ข้อเขียนสั้นสำหรับหมวดวิชาการ พร้อมเฉลยและเหตุผล</p>
+        <div id="examList"></div>
+      </div>
+    </section>
+
+    <!-- ===== บันทึกผล ===== -->
+    <section class="view" id="v-record" hidden>
+      <header class="page-head"><div><h2 id="recordTitle">บันทึกผลการฝึก</h2><p>กรอกผล ระบบรวมคะแนนให้ทันที แล้วสร้างภาพรายงานได้</p></div></header>
+      <div class="record-layout">
+        <form id="form" autocomplete="off">
+          <div class="row2">
+            <label>ชื่อ Roblox ผู้เข้ารับการฝึก
+              <input id="traineeName" type="text" required placeholder="เช่น Shark_01">
+            </label>
+            <label>ชื่อครูฝึกผู้ประเมิน
+              <input id="trainerName" type="text" placeholder="ชื่อครูฝึก">
+            </label>
+          </div>
+          <label>วันที่ฝึก<input id="trainDate" type="date"></label>
+
+          <fieldset>
+            <legend>ผลหมวดกายภาพ <span id="sumPhys">0 / 50</span></legend>
+            <div id="physInputs"></div>
+          </fieldset>
+          <fieldset>
+            <legend>ผลหมวดวิชาการ <span id="sumAcad">0 / 30</span></legend>
+            <div id="acadInputs"></div>
+          </fieldset>
+          <fieldset>
+            <legend>วินัยและการทำงานเป็นทีม <span id="sumDisc">0 / 20</span></legend>
+            <div id="discInputs"></div>
+          </fieldset>
+
+          <label>หมายเหตุจากครูฝึก
+            <textarea id="notes" rows="3" placeholder="จุดแข็ง จุดที่ต้องแก้ไข เหตุผลหากไม่ผ่าน"></textarea>
+          </label>
+
+          <fieldset>
+            <legend>บันทึกภาพผลการฝึก</legend>
+            <label class="drop" id="drop">
+              <input id="photoInput" type="file" accept="image/*" multiple hidden>
+              <b>คลิก ลากวาง หรือกด Ctrl+V เพื่อเพิ่มรูป</b>
+              <span>แคปหน้าจอผลฝึก ภาพถ่ายหมู่ หรือบอร์ดคะแนน (ย่อขนาดอัตโนมัติ)</span>
+            </label>
+            <div class="thumbs" id="thumbs"></div>
+          </fieldset>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">บันทึกผล</button>
+            <button type="button" class="btn" id="previewBtn">สร้างภาพรายงาน (PNG)</button>
+            <button type="button" class="btn ghost" id="resetBtn">ล้างฟอร์ม</button>
+          </div>
+        </form>
+
+        <aside class="live" aria-live="polite">
+          <div class="ring" id="ring" style="--p:0"><b id="totalNum">0</b><span>/ 100</span></div>
+          <div class="verdict" id="verdict">ยังไม่มีคะแนน</div>
+          <ul class="breakdown">
+            <li>กายภาพ <b id="bPhys">0</b>/50</li>
+            <li>วิชาการ <b id="bAcad">0</b>/30</li>
+            <li>วินัยและทีม <b id="bDisc">0</b>/20</li>
+          </ul>
+          <p class="advice" id="advice"></p>
+          <button type="button" class="btn wide" id="copyBtn">คัดลอกสรุปส่ง Discord</button>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ===== รายชื่อ ===== -->
+    <section class="view" id="v-trainees" hidden>
+      <header class="page-head"><div><h2>รายชื่อผู้เข้ารับการฝึก</h2><p>แก้ไข ดาวน์โหลดภาพรายงาน และส่งออกข้อมูล</p></div></header>
+      <div class="archive-bar">
+        <input id="search" type="search" placeholder="ค้นหาชื่อ Roblox">
+        <select id="filterGrade" aria-label="กรองผล">
+          <option value="">ทุกผล</option><option value="pass">ผ่าน</option><option value="wait">รอประเมินซ้ำ</option><option value="fail">ไม่ผ่าน</option>
+        </select>
+        <button class="btn" id="csvBtn">ส่งออก CSV</button>
+        <button class="btn" id="jsonBtn">สำรอง JSON</button>
+        <label class="btn">นำเข้า JSON<input id="importInput" type="file" accept=".json" hidden></label>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ชื่อ Roblox</th><th>ครูฝึก</th><th>วันที่</th><th>คะแนน</th><th>ผล</th><th>รูป</th><th></th></tr></thead>
+          <tbody id="recordBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ===== ตั้งค่า ===== -->
+    <section class="view" id="v-settings" hidden>
+      <header class="page-head"><div><h2>ตั้งค่า</h2><p>รหัสผ่านและการจัดการข้อมูล</p></div></header>
+      <div class="settings">
+        <form id="passForm" class="panel" autocomplete="off">
+          <h3>เปลี่ยนรหัสผ่านครูฝึก</h3>
+          <label>รหัสผ่านเดิม<input id="oldPass" type="password" required></label>
+          <label>รหัสผ่านใหม่<input id="newPass" type="password" required minlength="4"></label>
+          <button class="btn primary" type="submit">เปลี่ยนรหัสผ่าน</button>
+        </form>
+        <div class="panel">
+          <h3>พื้นที่เก็บข้อมูล</h3>
+          <p id="storageInfo"></p>
+          <div class="progress"><div id="storageBar"></div></div>
+          <p class="sub small">เบราว์เซอร์เก็บได้ราว 5 MB ถ้าเต็มให้สำรอง JSON แล้วลบรายการเก่า</p>
+          <button class="btn danger" id="wipeBtn">ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด</button>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="lightbox">
+  <img alt="ภาพ">
+  <div class="dlg-actions"><a class="btn primary" id="dlBtn" hidden download>ดาวน์โหลดภาพ</a><button class="btn" id="closeLb">ปิด</button></div>
+</dialog>
+<div class="toast" id="toast" role="status"></div>
+<script src="script.js"></script>
+</body>
+</html>
