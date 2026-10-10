@@ -3,6 +3,12 @@
    รัน:  node server.js     แล้วเปิด http://localhost:3000
    รหัสผ่านเริ่มต้น 0104 (เปลี่ยนได้ด้วย HW_PASSWORD)
    ข้อมูลทุกคนเก็บรวมที่ data.json (เปลี่ยนที่เก็บได้ด้วย DATA_DIR)
+
+   เชื่อม Google Sheet (ไม่บังคับ):
+     SHEETS_URL = ลิงก์ Web app ของ Apps Script (ลงท้าย /exec)
+     SHEETS_KEY = รหัสลับเดียวกับ SECRET ใน Apps Script
+   เมื่อเปิดใช้ Sheet จะเป็นฐานข้อมูลหลัก แก้ฝั่งไหนก็ตรงกัน (ต้องใช้ Node 18+)
+   รูปภาพเก็บที่ data.json เท่านั้น ไม่ขึ้น Sheet
    ========================================================= */
 const http = require('http');
 const fs = require('fs');
@@ -15,6 +21,8 @@ const PASSWORD = process.env.HW_PASSWORD || '0104';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const TOKEN = crypto.createHmac('sha256', 'hellweek-v1').update(PASSWORD).digest('hex');
+const SHEETS_URL = process.env.SHEETS_URL || '';
+const SHEETS_KEY = process.env.SHEETS_KEY || '';
 const MAX_BODY = 30 * 1024 * 1024;
 
 const STATIC = {
@@ -37,6 +45,52 @@ function clean(r) {
   if (!r || typeof r !== 'object' || !r.id || typeof r.name !== 'string' || !r.name.trim() || !r.scores || typeof r.scores.total !== 'number') return null;
   r.photos = Array.isArray(r.photos) ? r.photos.filter(p => typeof p === 'string' && p.startsWith('data:image/')).slice(0, 12) : [];
   return r;
+}
+
+/* ---------- Google Sheet ---------- */
+function sheetErr(e) { const err = new Error(e.message || 'sheet'); err.sheet = true; return err; }
+async function sheetCall(payload) {
+  try {
+    const res = await fetch(SHEETS_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ ...payload, key: SHEETS_KEY }), redirect: 'follow' });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'sheet error');
+    return j;
+  } catch (e) { throw sheetErr(e); }
+}
+async function sheetList() {
+  try {
+    const res = await fetch(SHEETS_URL + (SHEETS_URL.includes('?') ? '&' : '?') + 'action=list&key=' + encodeURIComponent(SHEETS_KEY), { redirect: 'follow' });
+    const j = await res.json();
+    if (!j.ok) throw new Error(j.error || 'sheet error');
+    return j.records;
+  } catch (e) { throw sheetErr(e); }
+}
+const forSheet = r => { const { photos, ...rest } = r; return { ...rest, photoCount: (photos || []).length }; };
+function mergeFromSheet(list) {
+  const byId = new Map(records.map(r => [String(r.id), r]));
+  records = list.map(s => { const { photoCount, ...rest } = s; return { ...rest, photos: byId.get(String(s.id))?.photos || [] }; });
+  persist();
+}
+let lastPull = 0;
+async function refresh(force) {
+  if (!SHEETS_URL || (!force && Date.now() - lastPull < 5000)) return;
+  mergeFromSheet(await sheetList());
+  lastPull = Date.now();
+}
+async function initSheets() {
+  if (!SHEETS_URL) return;
+  try {
+    const list = await sheetList();
+    if (!list.length && records.length) {
+      await sheetCall({ action: 'upsert', records: records.map(forSheet) });
+      console.log(`  Google Sheet ว่าง จึงส่งข้อมูลเดิม ${records.length} รายการขึ้น Sheet แล้ว`);
+    } else {
+      try { if (fs.existsSync(DATA_FILE)) fs.copyFileSync(DATA_FILE, DATA_FILE + '.bak'); } catch {}
+      mergeFromSheet(list);
+      console.log(`  ดึงข้อมูลจาก Google Sheet ${list.length} รายการ (สำรองไฟล์เดิมไว้ที่ data.json.bak)`);
+    }
+    lastPull = Date.now();
+  } catch (e) { console.log('  เชื่อมต่อ Google Sheet ไม่สำเร็จ:', e.message); }
 }
 
 /* ---------- ตัวช่วย ---------- */
@@ -89,27 +143,31 @@ http.createServer(async (req, res) => {
     if (p.startsWith('/api/')) {
       if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
 
-      if (p === '/api/records' && req.method === 'GET') return send(res, 200, records);
+      if (p === '/api/records' && req.method === 'GET') { try { await refresh(false); } catch {} return send(res, 200, records); }
 
       if (p === '/api/records' && req.method === 'POST') {
         const body = await readBody(req);
         const incoming = (Array.isArray(body) ? body : [body]).map(clean).filter(Boolean);
+        if (SHEETS_URL) await sheetCall({ action: 'upsert', records: incoming.map(forSheet) });
         incoming.forEach(r => {
           const i = records.findIndex(x => String(x.id) === String(r.id));
           if (i >= 0) records[i] = r; else records.unshift(r);
         });
         persist();
+        if (SHEETS_URL) { try { await refresh(true); } catch {} }
         return send(res, 200, records);
       }
 
       if (p.startsWith('/api/records/') && req.method === 'DELETE') {
         const id = decodeURIComponent(p.split('/').pop());
+        if (SHEETS_URL) await sheetCall({ action: 'delete', id });
         records = records.filter(r => String(r.id) !== id);
         persist();
         return send(res, 200, records);
       }
 
       if (p === '/api/records' && req.method === 'DELETE') {
+        if (SHEETS_URL) await sheetCall({ action: 'wipe' });
         records = [];
         persist();
         return send(res, 200, records);
@@ -117,12 +175,14 @@ http.createServer(async (req, res) => {
     }
     send(res, 404, { error: 'not found' });
   } catch (e) {
-    send(res, 400, { error: 'bad request' });
+    send(res, e.sheet ? 502 : 400, { error: e.sheet ? 'sheet unavailable' : 'bad request' });
   }
 }).listen(PORT, '0.0.0.0', () => {
   console.log(`\nHell Week ห้องครูฝึก พร้อมใช้งาน`);
   console.log(`  เครื่องนี้:        http://localhost:${PORT}`);
   Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal)
     .forEach(i => console.log(`  เครื่องอื่นในเน็ตเดียวกัน: http://${i.address}:${PORT}`));
-  console.log(`  ไฟล์ข้อมูล:         ${DATA_FILE}\n`);
+  console.log(`  ไฟล์ข้อมูล:         ${DATA_FILE}`);
+  console.log(SHEETS_URL ? '  โหมด: เชื่อม Google Sheet' : '  โหมด: เก็บในไฟล์ data.json (ยังไม่ได้ตั้ง SHEETS_URL)');
+  initSheets().then(() => console.log(''));
 });

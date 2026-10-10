@@ -149,7 +149,8 @@ let CACHE = load(STORE_KEY, []);
 let syncTimer = null, lastSig = '';
 
 const getRecords = () => CACHE;
-const sigOf = list => list.map(r => r.id + ':' + (r.updated || 0)).join('|');
+const sigOf = list => list.map(r => r.id + ':' + (r.updated || 0) + ':' + (r.scores?.total ?? 0)).join('|');
+const fixScores = list => list.map(r => ({ ...r, scores: scoresOf(r) }));
 
 async function api(path, opt = {}) {
   const res = await fetch('/api' + path, { ...opt, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN } });
@@ -158,12 +159,12 @@ async function api(path, opt = {}) {
   return res.json();
 }
 async function pull() {
-  CACHE = await api('/records');
+  CACHE = fixScores(await api('/records'));
   lastSig = sigOf(CACHE);
 }
 async function upsertRecords(recs) {
   try {
-    if (MODE === 'server') { CACHE = await api('/records', { method: 'POST', body: JSON.stringify(recs) }); }
+    if (MODE === 'server') { CACHE = fixScores(await api('/records', { method: 'POST', body: JSON.stringify(recs) })); }
     else {
       const backup = CACHE;
       const next = [...CACHE];
@@ -177,14 +178,14 @@ async function upsertRecords(recs) {
 }
 async function deleteRecord(id) {
   try {
-    if (MODE === 'server') CACHE = await api('/records/' + encodeURIComponent(id), { method: 'DELETE' });
+    if (MODE === 'server') CACHE = fixScores(await api('/records/' + encodeURIComponent(id), { method: 'DELETE' }));
     else { CACHE = CACHE.filter(r => r.id != id); save(STORE_KEY, CACHE); }
     lastSig = sigOf(CACHE);
   } catch { toast('ลบไม่สำเร็จ'); }
 }
 async function wipeAll() {
   try {
-    if (MODE === 'server') CACHE = await api('/records', { method: 'DELETE' });
+    if (MODE === 'server') CACHE = fixScores(await api('/records', { method: 'DELETE' }));
     else { CACHE = []; localStorage.removeItem(STORE_KEY); }
     lastSig = '';
   } catch { toast('ลบไม่สำเร็จ'); }
@@ -192,7 +193,7 @@ async function wipeAll() {
 async function sync() {
   if (MODE !== 'server' || document.hidden) return;
   try {
-    const list = await api('/records');
+    const list = fixScores(await api('/records'));
     const sig = sigOf(list);
     if (sig === lastSig) return;
     CACHE = list; lastSig = sig;
