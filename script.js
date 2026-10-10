@@ -5,117 +5,12 @@
    ========================================================= */
 
 /* ---------- 1) ข้อมูลหลักสูตร (แก้ตัวเลขได้ที่นี่) ---------- */
-const STATIONS = [
-  { id: 'jj',   name: 'กระโดดตบ (Jumping Jacks)', target: 900, unit: 'ครั้ง', max: 7, note: 'บันทึกจำนวนครั้งโดยครูฝึก' },
-  { id: 'su',   name: 'ซิตอัป (Sit-ups)',          target: 500, unit: 'ครั้ง', max: 7, note: 'ใช้ระบบนับจำนวนหรือคำสั่งจำลองในเกม' },
-  { id: 'pu',   name: 'ดันพื้น (Push-ups)',        target: 500, unit: 'ครั้ง', max: 7, note: 'ครูฝึกตรวจสอบผลตามระบบของแมพ' },
-  { id: 'obby', name: 'OBBY — ด่านอุปสรรค',        target: 20,  unit: 'รอบ',   max: 7, note: 'ต้องผ่านด่านและกลับถึงจุดเริ่มต้นตามเส้นทางที่กำหนด' },
-  { id: 'pool', name: 'ว่ายน้ำในสระ',              target: 30,  unit: 'รอบ',   max: 7, note: 'ไป–กลับ ว่ายจากจุดเริ่มต้นไปปลายสระและกลับมาจุดเดิม' },
-  { id: 'map',  name: 'ว่ายน้ำรอบแมพ',             target: 10,  unit: 'รอบ',   max: 7, note: 'ว่ายตามเส้นทางที่กำหนดไว้รอบแผนที่ในเกม' },
-  { id: 'cqb',  name: 'CQB — Close Quarters Battle', target: null, unit: 'คะแนน', max: 8, note: 'ทดสอบภาคปฏิบัติ: เคลื่อนที่ในอาคาร สื่อสาร แบ่งหน้าที่ และทำตามคำสั่งในสถานการณ์จำลอง' }
-];
-
-const SUBJECTS = [
-  {
-    title: 'วิชาที่ 1 — ความรู้เกี่ยวกับหน่วย SEAL',
-    why: 'ให้ผู้เข้ารับการฝึกรู้ว่าหน่วยมีไว้ทำอะไร ใครสั่งใคร และอะไรทำได้หรือไม่ได้ ก่อนเข้าปฏิบัติภารกิจร่วมกัน',
-    topics: [
-      ['ภารกิจและหน้าที่ของหน่วย', 'SEAL คือหน่วยปฏิบัติการพิเศษ เน้นภารกิจทางน้ำ ทางบก และทางอากาศ เช่น ลาดตระเวน กู้ภัยตัวประกัน ปฏิบัติการลับ ต้องรู้ว่าหน่วยของเรารับภารกิจประเภทไหน'],
-      ['สายการบังคับบัญชา', 'จำลำดับยศตั้งแต่ผู้บัญชาการ ผู้ช่วย ครูฝึก หัวหน้าหมู่ จนถึงพลทหาร และรู้ว่าต้องรายงานใครก่อน ห้ามข้ามสายบังคับบัญชา'],
-      ['ระเบียบและข้อบังคับประจำหน่วย', 'กฎของเซิร์ฟเวอร์และ Discord การแต่งกาย ชื่อเรียก เวลาเข้าร่วมกิจกรรม และบทลงโทษเมื่อละเมิด'],
-      ['หน้าที่ของกำลังพลแต่ละตำแหน่ง', 'เช่น Point man (นำหน้า), Breacher (เปิดประตู), Medic (พยาบาล), Radio operator (สื่อสาร), Rear guard (คุ้มกันท้าย)']
-    ],
-    example: 'ถามว่า "ถ้าหัวหน้าหมู่ไม่อยู่ ใครสั่งการต่อ?" ผู้เข้ารับการฝึกต้องตอบได้ทันทีตามสายบังคับบัญชา',
-    criteria: 'ตอบปากเปล่าหรือข้อสอบสั้น 5 ข้อ ข้อละ 1 คะแนน'
-  },
-  {
-    title: 'วิชาที่ 2 — วินัยและคำสั่งทางทหาร',
-    why: 'ความเก่งส่วนตัวไม่มีความหมายถ้าไม่ฟังคำสั่ง วินัยทำให้ทีมเคลื่อนที่เป็นหนึ่งเดียวภายใต้แรงกดดัน',
-    topics: [
-      ['การรับและทวนคำสั่ง', 'ทวนซ้ำสั้น ๆ เช่น "รับทราบ! เข้าตรวจอาคาร B ทางประตูหลัง" เพื่อให้แน่ใจว่าเข้าใจตรงกัน'],
-      ['การรายงานผู้บังคับบัญชา', 'รายงานตรงประเด็น: ใคร ที่ไหน ทำอะไร ผลเป็นอย่างไร ไม่เล่าอ้อม ไม่แก้ตัว'],
-      ['การรักษาระเบียบแถว', 'เข้าแถวตรงเวลา ยืนตามตำแหน่ง ไม่พูดคุยในแถว เคลื่อนไหวเมื่อได้รับคำสั่งเท่านั้น'],
-      ['การรับผิดชอบต่อหน้าที่', 'ทำผิดพลาดให้รายงานทันที ไม่ปิดบัง ไม่โทษเพื่อน แก้ไขแล้วไปต่อ']
-    ],
-    example: 'ครูฝึกสั่ง "ทุกคนหยุด!" ระหว่างวิ่ง ทุกคนต้องหยุดทันทีโดยไม่ถามเหตุผล',
-    criteria: 'สังเกตตลอดหลักสูตร ให้คะแนนจากการทวนคำสั่ง การตรงเวลา และการยอมรับความผิดพลาด'
-  },
-  {
-    title: 'วิชาที่ 3 — การทำงานเป็นทีม',
-    why: 'Hell Week ออกแบบให้ไม่มีใครรอดคนเดียว ทีมที่ดูแลกันและสื่อสารชัดเจนจะผ่านด่านได้เร็วกว่าคนเก่งที่ทำงานเดี่ยว',
-    topics: [
-      ['การแบ่งหน้าที่ภายในหมู่', 'ก่อนเริ่มภารกิจต้องตกลงบทบาทให้ชัดว่าใครนำ ใครเปิดทาง ใครคุ้มกัน และใครสำรอง'],
-      ['การสื่อสารระหว่างปฏิบัติภารกิจ', 'พูดสั้น ชัด ครั้งละหนึ่งเรื่อง ไม่พูดทับกัน และฟังก่อนตอบ'],
-      ['การแก้ไขปัญหาเมื่อสมาชิกทำภารกิจไม่สำเร็จ', 'ช่วยกันทันที เช่น แบ่งงานใหม่ หรือรอเพื่อน ไม่ตำหนิต่อหน้าทีม ค่อยสรุปบทเรียนหลังภารกิจ'],
-      ['การตัดสินใจภายใต้เวลาจำกัด', 'ประเมิน → ตัดสินใจ → ลงมือ ภายใน 5–10 วินาที ถ้าไม่มั่นใจให้ถามหัวหน้าหมู่ อย่ายืนนิ่ง']
-    ],
-    example: 'สมาชิกตกจากด่าน OBBY ซ้ำ ๆ เพื่อนบอกเส้นทางผ่านวิทยุและรอจนเขาผ่าน คือพฤติกรรมที่ควรให้คะแนนสูง',
-    criteria: 'ประเมินจากสถานการณ์กลุ่ม และการสังเกตระหว่าง CQB'
-  },
-  {
-    title: 'วิชาที่ 4 — การสื่อสารและรายงาน',
-    why: 'วิทยุคือเส้นชีวิตของทีม ข้อความที่ยาวหรือคลุมเครืออาจทำให้เพื่อนเสียเวลาหรือเสียตำแหน่งสำคัญ',
-    topics: [
-      ['การใช้วิทยุสื่อสารในเกม', 'กดพูดแล้วรอ 1 วินาที พูดช้า ชัด ใช้ศัพท์มาตรฐาน (ดูตารางคำศัพท์) และจบด้วย Over หรือ Out'],
-      ['การรายงานสถานการณ์', 'ใช้ SALUTE: Size ขนาดกำลัง, Activity กำลังทำอะไร, Location ที่ไหน, Unit สังกัด, Time เวลา, Equipment อุปกรณ์'],
-      ['การแจ้งตำแหน่งและสถานะภารกิจ', 'อ้างอิงอาคาร ชั้น ทิศ หรือจุดสังเกตในแมพ เช่น "อาคาร A ชั้น 2 ทิศตะวันออก" แล้วแจ้งสถานะ: กำลังเคลื่อนที่ / ถึงจุดแล้ว / ภารกิจเสร็จ'],
-      ['การเขียนรายงานหลังจบภารกิจ', 'วัตถุประสงค์ → สิ่งที่ทำ → ผลลัพธ์ → ปัญหา → ข้อเสนอแนะ ภายใน 5–8 บรรทัด']
-    ],
-    example: '"Alpha-1 ถึง Command, ถึงจุด Bravo แล้ว พบฝ่ายตรงข้าม 2 นาย ชั้น 2 ทิศเหนือ, Over."',
-    criteria: 'ให้รายงาน 1 สถานการณ์ต่อหน้าครูฝึก และส่งรายงานหลังภารกิจ 1 ฉบับ'
-  },
-  {
-    title: 'วิชาที่ 5 — CQB และสถานการณ์จำลอง',
-    why: 'CQB คือการรบในที่แคบ ต้องอาศัยจังหวะ การสื่อสาร และความไว้ใจ และมีความเสี่ยงยิงพวกเดียวกันถ้าไม่ฝึกกฎให้แม่น',
-    topics: [
-      ['กฎความปลอดภัยในการฝึกจำลอง', 'ฟังสัญญาณเริ่มและหยุดเสมอ ห้ามเริ่มเองก่อนครูฝึกสั่ง และหยุดทันทีเมื่อได้ยิน "Cease fire / หยุดฝึก"'],
-      ['การระบุเป้าหมายในเกม', 'ยืนยันเป้าหมายก่อนยิงทุกครั้ง ดูชื่อ ทีม หรือเครื่องแบบ ห้ามยิงโดยไม่แน่ใจ'],
-      ['การแยกแยะฝ่ายเดียวกันกับฝ่ายตรงข้ามตามระบบเกม', 'ใช้สีทีม ป้ายชื่อ หรือระบบ Team ของแมพ และสื่อสารกับเพื่อนว่ากำลังเข้าห้องไหน'],
-      ['การปฏิบัติตามกติกาภารกิจและการยุติการฝึก', 'ทำตามเงื่อนไขชนะ-แพ้ของภารกิจ ไม่ใช้บั๊กหรือช่องโหว่ และยุติการฝึกเมื่อครูฝึกสั่ง']
-    ],
-    example: 'เปิดประตูห้อง ทีมต้องตะโกน "Clear!" เมื่อห้องปลอดภัย และ "Contact!" เมื่อพบศัตรู ก่อนเคลื่อนที่ต่อ',
-    criteria: 'ผ่านการทดสอบกฎความปลอดภัยด้วยปากเปล่าก่อน จึงให้เข้าสอบ CQB จริง'
-  },
-  {
-    title: 'วิชาที่ 6 — การวางแผนภารกิจและจริยธรรม Roleplay',
-    why: 'ภารกิจที่ดีเริ่มจากแผนที่ชัดเจน และการเล่นบทบาทที่ดีคือการเล่นอย่างยุติธรรม ให้คนอื่นสนุกไปด้วย',
-    topics: [
-      ['การบรีฟภารกิจ (Mission Brief)', 'ก่อนออกปฏิบัติการต้องรู้ 5 อย่าง: สถานการณ์ ภารกิจ การดำเนินการ การส่งกำลังบำรุง และการบังคับบัญชา/สื่อสาร'],
-      ['แผนสำรองและจุดนัดพบ', 'กำหนด Plan B และจุดรวมพลหากแผนล้มเหลวหรือหลุดจากกลุ่ม'],
-      ['การเล่นบทบาทที่ยุติธรรม (Fair play)', 'ไม่ใช้ข้อมูลนอกเกมมาตัดสินใจ (Metagaming) ไม่บังคับเล่นบทเพื่อน และไม่ฆ่าโดยไม่มีเหตุผลในเนื้อเรื่อง'],
-      ['การทำ AAR (After Action Review)', 'หลังภารกิจประชุมสั้น ๆ ตอบ 3 ข้อ: ตั้งใจทำอะไร เกิดอะไรขึ้นจริง ครั้งหน้าจะปรับอะไร'],
-      ['การดูแลเพื่อนร่วมทีม', 'สังเกตเพื่อนที่เหนื่อยหรือท้อ พักได้ถ้าจำเป็น เพราะหลักสูตรนี้เป็นเกม ไม่ใช่การแข่งขันที่ต้องแลกกับสุขภาพจริง']
-    ],
-    example: 'หัวหน้าหมู่บรีฟ 1 นาที แล้วถามทุกคนว่า "ถ้าประตูหน้าเปิดไม่ได้ ใครทำอะไร?" ทุกคนต้องตอบได้',
-    criteria: 'วางแผนภารกิจสั้น ๆ 1 แผนส่งครูฝึก และตอบคำถามเรื่อง Fair play 2 ข้อ'
-  }
-];
-
-const GLOSSARY = [
-  ['Roger / Copy', 'รับทราบข้อความแล้ว'], ['Wilco', 'รับทราบและจะปฏิบัติตาม'],
-  ['Say again', 'ขอให้พูดซ้ำ'], ['Standby', 'รอก่อน เดี๋ยวตอบ'],
-  ['Over', 'จบข้อความ รอตอบกลับ'], ['Out', 'จบการสนทนา ไม่ต้องตอบ'],
-  ['Contact', 'พบฝ่ายตรงข้าม'], ['Clear', 'พื้นที่ปลอดภัย ไม่พบใคร'],
-  ['Breach', 'เปิดทางเข้า (ประตู/กำแพง)'], ['Medic', 'ขอพยาบาล มีคนบาดเจ็บ'],
-  ['Cease fire', 'หยุดยิง/หยุดฝึกทันที'], ['Rally point', 'จุดนัดพบเมื่อเกิดเหตุ']
-];
-
-const EXAM = [
-  { q: 'ได้รับคำสั่งจากหัวหน้าหมู่ ควรทำอะไรเป็นอย่างแรก?', o: ['เงียบแล้วลงมือทำ', 'ทวนคำสั่งให้ตรงกัน', 'ถามเหตุผลก่อน', 'รอให้เพื่อนทำก่อน'], a: 1, e: 'การทวนคำสั่งทำให้แน่ใจว่าเข้าใจตรงกัน และเป็นหลักวินัยพื้นฐาน (วิชา 2)' },
-  { q: 'คำว่า "Contact" ทางวิทยุหมายถึง?', o: ['ขอพยาบาล', 'พื้นที่ปลอดภัย', 'พบฝ่ายตรงข้าม', 'รอก่อน'], a: 2, e: 'Contact = พบฝ่ายตรงข้าม ส่วน Clear = ปลอดภัย (วิชา 4)' },
-  { q: 'ได้ยิน "Cease fire" ระหว่างฝึก CQB ต้องทำอย่างไร?', o: ['ยิงต่อจนจบรอบ', 'หยุดทันที', 'ถามครูฝึกว่าทำไม', 'วิ่งไปจุดเริ่มต้น'], a: 1, e: 'ความปลอดภัยมาก่อน หยุดทันทีแล้วรับฟังคำสั่งต่อไป (วิชา 5)' },
-  { q: 'เพื่อนในทีมทำด่านไม่ผ่านจนทีมช้า ควรทำอย่างไร?', o: ['ตำหนิต่อหน้าทุกคน', 'ทิ้งไว้แล้วไปต่อ', 'ช่วยแนะนำและรอ แล้วสรุปบทเรียนทีหลัง', 'ขอให้ครูฝึกเปลี่ยนคน'], a: 2, e: 'ทีมที่ดีช่วยกันก่อน แล้วค่อยทำ AAR (วิชา 3, 6)' },
-  { q: 'ตัวย่อ SALUTE ใช้ทำอะไร?', o: ['รายงานข้อมูลฝ่ายตรงข้าม', 'ทำความเคารพ', 'เรียกกำลังเสริม', 'แบ่งหน้าที่ในหมู่'], a: 0, e: 'SALUTE คือรูปแบบรายงาน: ขนาด กิจกรรม ตำแหน่ง สังกัด เวลา อุปกรณ์ (วิชา 4)' },
-  { q: 'การใช้ข้อมูลที่เห็นนอกเกมมาตัดสินใจในเกม เรียกว่า?', o: ['Fair play', 'Metagaming', 'AAR', 'Breach'], a: 1, e: 'Metagaming ทำให้ Roleplay ไม่ยุติธรรม (วิชา 6)' },
-  { q: 'ก่อนยิงในสถานการณ์ CQB ต้องทำอะไร?', o: ['ยืนยันเป้าหมายก่อน', 'ยิงก่อนเพื่อความปลอดภัย', 'ตะโกนชื่อตัวเอง', 'รอเพื่อนยิงก่อน'], a: 0, e: 'ยืนยันจากชื่อ ทีม หรือเครื่องแบบ เพื่อไม่ให้ยิงพวกเดียวกัน (วิชา 5)' },
-  { q: 'รายงานหลังจบภารกิจควรมีหัวข้อใด?', o: ['วัตถุประสงค์ สิ่งที่ทำ ผลลัพธ์ ปัญหา ข้อเสนอแนะ', 'ชื่อเพื่อนที่ทำผิด', 'คะแนนส่วนตัวเท่านั้น', 'ภาพหน้าจอเท่านั้น'], a: 0, e: 'โครงสร้างที่ชัดเจนช่วยให้ผู้บังคับบัญชาอ่านเข้าใจเร็ว (วิชา 4)' }
-];
+// ข้อมูลหลักสูตรและข้อสอบถูกส่งจากเซิร์ฟเวอร์หลังครูฝึกล็อกอินเท่านั้น (ดู loadCourse)
+let STATIONS = [], SUBJECTS = [], GLOSSARY = [], EXAM = [];
 
 const STORE_KEY = 'hellweek_records_v1';
 const TOKEN_KEY = 'hellweek_token';
-const LOCAL_ADMIN_PASS = '9999';   // รหัสแอดมินของโหมดเปิดไฟล์ตรง ๆ (ไม่มีเซิร์ฟเวอร์) เปลี่ยนได้ แต่โหมดนี้ไม่ปลอดภัยจริง
 const ROLE_KEY = 'hellweek_role';
-const LOCAL_PASS = '0104';   // ใช้เฉพาะโหมดเปิดไฟล์ตรง ๆ (ไม่มีเซิร์ฟเวอร์)
 const SESSION_KEY = 'hellweek_session';
 
 /* ---------- 2) ตัวช่วย ---------- */
@@ -145,11 +40,11 @@ function gradeOf(total) {
 /* ---------- 3) ข้อมูลร่วมกันทุกเครื่อง + ล็อกอิน ----------
    MODE 'server' = รันผ่าน server.js ทุกเครื่องเห็นข้อมูลชุดเดียวกัน
    MODE 'local'  = เปิดไฟล์ตรง ๆ เก็บ localStorage เฉพาะเครื่องนี้ */
-let MODE = 'local';
+let MODE = 'server';
 let TOKEN = sessionStorage.getItem(TOKEN_KEY) || '';
 let ROLE = sessionStorage.getItem(ROLE_KEY) || 'user';
 const isAdmin = () => ROLE === 'admin';
-let CACHE = load(STORE_KEY, []);
+let CACHE = [];
 let syncTimer = null, lastSig = '';
 
 const getRecords = () => CACHE;
@@ -162,6 +57,10 @@ async function api(path, opt = {}) {
   if (res.status === 403) throw new Error('403');
   if (!res.ok) throw new Error(String(res.status));
   return res.json();
+}
+async function loadCourse() {
+  const d = await api('/course');
+  STATIONS = d.STATIONS; SUBJECTS = d.SUBJECTS; GLOSSARY = d.GLOSSARY; EXAM = d.EXAM;
 }
 async function pull() {
   CACHE = fixScores(await api('/records'));
@@ -199,6 +98,7 @@ async function wipeAll() {
 }
 async function sync() {
   if (MODE !== 'server' || document.hidden) return;
+  loadExamRequests();
   try {
     const list = fixScores(await api('/records'));
     const sig = sigOf(list);
@@ -234,22 +134,23 @@ async function onLogin(e) {
     sessionStorage.setItem(TOKEN_KEY, TOKEN);
     sessionStorage.setItem(ROLE_KEY, ROLE);
     MODE = 'server';
-    try { await pull(); } catch { $('#lockErr').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'; return; }
+    try { await loadCourse(); await pull(); } catch { $('#lockErr').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'; return; }
     return enterApp();
   }
   if (res && res.status === 401) return showWrong();
   if (res && res.status === 429) { $('#lockErr').textContent = 'ลองผิดหลายครั้ง รอ 1 นาทีแล้วลองใหม่'; return; }
-  // ไม่มีเซิร์ฟเวอร์ → โหมดเครื่องนี้
-  if (pass !== LOCAL_PASS && pass !== LOCAL_ADMIN_PASS) return showWrong();
-  ROLE = pass === LOCAL_ADMIN_PASS ? 'admin' : 'user';
-  sessionStorage.setItem(ROLE_KEY, ROLE);
-  MODE = 'local';
-  CACHE = load(STORE_KEY, []);
-  enterApp();
+  $('#lockErr').textContent = 'ไม่พบเซิร์ฟเวอร์ ต้องเปิดผ่านลิงก์ของเว็บหรือรัน node server.js เท่านั้น';
 }
 
-function enterApp() {
+async function enterApp() {
   sessionStorage.setItem(SESSION_KEY, '1');
+  if (!$('#app')) {   // หน้าครูฝึกไม่อยู่ใน index.html ต้องขอจากเซิร์ฟเวอร์ด้วยโทเคนครูฝึก
+    try {
+      const r = await fetch('/api/ui', { headers: { Authorization: 'Bearer ' + TOKEN } });
+      if (!r.ok) throw new Error();
+      $('#appHost').innerHTML = await r.text();
+    } catch { $('#lockErr').textContent = 'โหลดหน้าครูฝึกไม่สำเร็จ ลองใหม่อีกครั้ง'; return; }
+  }
   document.body.classList.remove('locked');
   $('#app').hidden = false;
   $('#roleBadge').textContent = isAdmin() ? 'แอดมิน (ลบข้อมูลได้)' : 'ครูฝึก (ลบข้อมูลไม่ได้)';
@@ -265,23 +166,22 @@ function enterApp() {
   clearInterval(syncTimer);
   if (MODE === 'server') syncTimer = setInterval(sync, 10000);
   show(location.hash.slice(1) || 'dashboard');
+  loadExamRequests();
 }
 function logout() {
-  sessionStorage.removeItem(SESSION_KEY);
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(ROLE_KEY);
-  TOKEN = ''; ROLE = 'user';
+  [SESSION_KEY, TOKEN_KEY, ROLE_KEY, 'hellweek_sname'].forEach(k => sessionStorage.removeItem(k));
   clearInterval(syncTimer);
   location.hash = '';
-  document.body.classList.add('locked');
-  $('#app').hidden = true;
-  $('#lockPass').value = '';
-  $('#lockErr').textContent = '';
+  location.reload();   // เคลียร์หน้าครูฝึก/ข้อสอบออกจากหน่วยความจำทั้งหมด
 }
 async function resume() {
-  if (sessionStorage.getItem(SESSION_KEY) !== '1') return;
-  if (TOKEN) { try { MODE = 'server'; await pull(); return enterApp(); } catch { MODE = 'local'; } }
-  if (!TOKEN) { MODE = 'local'; CACHE = load(STORE_KEY, []); enterApp(); }
+  if (sessionStorage.getItem(SESSION_KEY) !== '1' || !TOKEN) return;
+  try {
+    if (ROLE === 'student') return enterStudent(sessionStorage.getItem('hellweek_sname') || '');
+    await loadCourse();
+    await pull();
+    await enterApp();
+  } catch { logout(); }
 }
 
 /* ---------- 4) หน้าต่าง ๆ ---------- */
@@ -293,6 +193,7 @@ function show(view) {
   if (view === 'dashboard') renderDashboard();
   if (view === 'trainees') renderRecords();
   if (view === 'settings') renderStorage();
+  if (view === 'exams') loadExamRequests();
   window.scrollTo(0, 0);
 }
 
@@ -334,10 +235,12 @@ function renderCourse() {
 
   $('#glossary').innerHTML = GLOSSARY.map(g => `<div class="term"><b>${esc(g[0])}</b><span>${esc(g[1])}</span></div>`).join('');
 
-  $('#examList').innerHTML = EXAM.map((q, i) => `
-    <div class="exam-q"><h4>ข้อ ${i + 1}. ${esc(q.q)}</h4>
-      <ol type="ก">${q.o.map((o, j) => `<li class="${j === q.a ? 'ans' : ''}">${esc(o)}${j === q.a ? ' ✓' : ''}</li>`).join('')}</ol>
-      <p>${esc(q.e)}</p></div>`).join('');
+  const L = ['ก', 'ข', 'ค', 'ง'];
+  $('#examList').innerHTML = SUBJECTS.map((sb, si) => `<h3>${esc(sb.title)}</h3>` +
+    EXAM.filter(q => q.s === si).map((q, i) => `
+      <div class="exam-q"><h4>ข้อ ${i + 1}. ${esc(q.q)}</h4>
+        <ul class="opts">${q.o.map((o, j) => `<li class="${j === q.a ? 'ans' : ''}">${L[j]}. ${esc(o)}${j === q.a ? ' ✓' : ''}</li>`).join('')}</ul>
+        <p><b>เหตุผล:</b> ${esc(q.e)}</p></div>`).join('')).join('');
 
   $$('#courseTabs button').forEach(b => b.addEventListener('click', () => {
     $$('#courseTabs button').forEach(x => x.classList.toggle('active', x === b));
@@ -478,6 +381,8 @@ function collectRecord() {
     notes: $('#notes').value.trim(),
     photos: [...photos]
   };
+  const prev = editingId ? CACHE.find(x => x.id === editingId) : null;
+  if (prev?.email) rec.email = prev.email;
   rec.scores = scoresOf(rec);
   return rec;
 }
@@ -513,6 +418,15 @@ async function onSubmit(e) {
   const rec = collectRecord();
   if (!rec.name) { toast('กรอกชื่อ Roblox ก่อน'); return; }
   rec.updated = Date.now();
+  if (!editingId) {
+    const dup = getRecords().find(x => x.name.trim().toLowerCase() === rec.name.toLowerCase());
+    if (dup && confirm(`มีผู้เข้ารับการฝึกชื่อ "${dup.name}" อยู่แล้ว (เช่น จากการสอบออนไลน์)\nกด ตกลง เพื่ออัปเดตรายการเดิม (คะแนนวิชาการที่ช่องว่างจะคงค่าเดิมไว้)\nกด ยกเลิก เพื่อสร้างเป็นรายการใหม่`)) {
+      rec.id = dup.id; rec.email = dup.email || '';
+      rec.acad = rec.acad.map((v, i) => v === '' ? (dup.acad?.[i] ?? '') : v);
+      if (!rec.photos.length) rec.photos = dup.photos || [];
+      rec.scores = scoresOf(rec);
+    }
+  }
   if (!(await upsertRecords([rec]))) { toast(MODE === 'server' ? 'บันทึกไม่สำเร็จ ตรวจการเชื่อมต่อเซิร์ฟเวอร์' : 'พื้นที่เก็บข้อมูลเต็ม ลองลบรูปหรือสำรอง JSON ก่อน'); return; }
   try { localStorage.setItem('hw_trainer', rec.trainer); } catch {}
   toast(`บันทึกผลของ ${rec.name} แล้ว`);
@@ -784,8 +698,190 @@ function initApp() {
   $('#jsonBtn').addEventListener('click', () => download('hellweek-backup.json', JSON.stringify(getRecords()), 'application/json'));
   $('#importInput').addEventListener('change', e => { if (e.target.files[0]) importJSON(e.target.files[0]); e.target.value = ''; });
   $('#wipeBtn').addEventListener('click', wipe);
+  $('#examRefresh').addEventListener('click', loadExamRequests);
+  $('#examBody').addEventListener('click', onExamClick);
   window.addEventListener('hashchange', () => { if (!document.body.classList.contains('locked')) show(location.hash.slice(1)); });
 }
 
+/* ---------- 8) คำขอสอบ (ฝั่งครูฝึก) ---------- */
+let EXREQ = [], lastPending = -1;
+const EX_LABEL = {
+  pending: ['รออนุญาต', 'wait'], approved: ['อนุญาตแล้ว รอเริ่มสอบ', 'go'], inprogress: ['กำลังสอบ', 'go'],
+  done: ['สอบเสร็จ', 'pass'], denied: ['ไม่อนุญาต', 'fail'], expired: ['หมดเวลา/ไม่ได้ส่ง', 'off']
+};
+const fmtTime = t => t ? new Date(t).toLocaleString('th-TH', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Asia/Bangkok' }) : '-';
+
+function updateExamBadge() {
+  const n = EXREQ.filter(r => r.state === 'pending').length;
+  const b = $('#examBadge');
+  if (b) { b.textContent = n; b.hidden = !n; }
+  if (lastPending >= 0 && n > lastPending) toast('มีคำขอสอบใหม่');
+  lastPending = n;
+}
+async function loadExamRequests() {
+  try {
+    EXREQ = await api('/exam/requests');
+    updateExamBadge();
+    if ($('#v-exams') && !$('#v-exams').hidden) renderExamRequests();
+  } catch {}
+}
+function renderExamRequests() {
+  $('#examBody').innerHTML = EXREQ.length ? EXREQ.map(r => {
+    const [label, key] = EX_LABEL[r.state] || [r.state, 'off'];
+    const btn = (act, text, cls = '') => `<button class="btn small ${cls}" data-ex="${act}" data-id="${esc(r.id)}">${text}</button>`;
+    const acts = r.state === 'pending' ? btn('approve', 'อนุญาต', 'primary') + btn('deny', 'ไม่อนุญาต')
+      : r.state === 'approved' ? btn('deny', 'ยกเลิกสิทธิ์')
+      : r.state === 'denied' ? btn('approve', 'อนุญาต') : '';
+    const score = r.result ? `${r.result.total} / 30 <small>(${r.result.scores.join(' / ')})</small>` : '-';
+    return `<tr><td>${esc(r.name)}</td><td>${esc(r.email)}</td><td>${fmtTime(r.requestedAt)}</td>
+      <td><span class="tag ${key}">${label}</span></td><td>${score}</td><td><div class="acts">${acts}</div></td></tr>`;
+  }).join('') : `<tr><td class="empty" colspan="6">ยังไม่มีคำขอสอบ</td></tr>`;
+}
+async function onExamClick(e) {
+  const act = e.target.dataset.ex;
+  if (!act) return;
+  try {
+    EXREQ = await api('/exam/' + act, { method: 'POST', body: JSON.stringify({ id: e.target.dataset.id }) });
+    updateExamBadge();
+    renderExamRequests();
+    toast(act === 'approve' ? 'อนุญาตให้สอบแล้ว' : 'อัปเดตสถานะแล้ว');
+  } catch { toast('ทำรายการไม่สำเร็จ'); }
+}
+
+/* ---------- 9) ห้องสอบนักเรียน ---------- */
+let sPoll = null, sTick = null, sQs = [], sAns = {}, sEnd = 0, sId = '', sBusy = false;
+const sBody = () => $('#sBody');
+const fmtMs = ms => { const t = Math.max(0, Math.round(ms / 1000)); return String(Math.floor(t / 60)).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+
+async function onStudentLogin(e) {
+  e.preventDefault();
+  const err = $('#lockErr');
+  err.textContent = '';
+  const name = $('#stName').value.trim().replace(/\s+/g, ' '), email = $('#stEmail').value.trim();
+  let res = null;
+  try { res = await fetch('/api/student/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email }) }); } catch {}
+  if (!res) { err.textContent = 'ไม่พบเซิร์ฟเวอร์ ต้องเปิดผ่านลิงก์ของเว็บเท่านั้น'; return; }
+  if (res.status === 409) { err.textContent = 'อีเมลไม่ตรงกับที่ลงทะเบียนไว้กับชื่อนี้ ติดต่อครูฝึก'; return; }
+  if (!res.ok) { err.textContent = 'กรอกชื่อและอีเมลให้ถูกต้อง'; return; }
+  const d = await res.json();
+  TOKEN = d.token; ROLE = 'student';
+  sessionStorage.setItem(TOKEN_KEY, TOKEN);
+  sessionStorage.setItem(ROLE_KEY, ROLE);
+  sessionStorage.setItem('hellweek_sname', d.name);
+  enterStudent(d.name);
+}
+function enterStudent(name) {
+  sessionStorage.setItem(SESSION_KEY, '1');
+  document.body.classList.remove('locked');
+  $('#student').hidden = false;
+  $('#sName').textContent = name;
+  studentRefresh();
+}
+async function studentRefresh() { try { renderStudent(await api('/exam/status')); } catch {} }
+
+function renderStudent(v) {
+  clearInterval(sPoll); clearInterval(sTick);
+  const rules = `<ul class="s-rules">
+    <li>ข้อสอบ ${v.total || 30} ข้อ เวลา ${v.minutes || 45} นาที เริ่มจับเวลาเมื่อกดเริ่มสอบ</li>
+    <li>ส่งข้อสอบได้ครั้งเดียว ส่งแล้วแก้ไขไม่ได้</li>
+    <li>ถ้าหน้าจอค้างหรือรีเฟรช ให้เข้าสู่ระบบใหม่ ข้อสอบและเวลาจะทำต่อจากเดิม</li>
+    <li>คะแนนบันทึกลงผลการฝึกให้อัตโนมัติ</li></ul>`;
+  const B = sBody();
+
+  if (['none', 'denied', 'expired'].includes(v.state)) {
+    const msg = {
+      none: 'ยังไม่มีสิทธิ์สอบ กดขอสอบเพื่อส่งคำขอให้ครูฝึก เมื่อครูฝึกอนุญาตแล้วจึงจะเริ่มสอบได้',
+      denied: 'ครูฝึกไม่อนุญาตในครั้งนี้ หากมีข้อสงสัยให้ติดต่อครูฝึก',
+      expired: 'การสอบครั้งก่อนหมดเวลาโดยไม่ได้ส่งข้อสอบ ต้องขออนุญาตครูฝึกใหม่'
+    }[v.state];
+    B.innerHTML = `<div class="s-card"><h2>ห้องสอบวิชาการ</h2><p>${msg}</p>${rules}<button class="btn primary" id="sReq">ขอเข้าสอบ</button></div>`;
+    $('#sReq').onclick = studentRequest;
+  } else if (v.state === 'pending') {
+    B.innerHTML = `<div class="s-card"><h2>ส่งคำขอแล้ว</h2><div class="s-wait"><i></i><span>รอครูฝึกอนุญาต หน้านี้จะอัปเดตเอง ไม่ต้องรีเฟรช</span></div>${rules}</div>`;
+    sPoll = setInterval(studentRefresh, 5000);
+  } else if (v.state === 'approved') {
+    B.innerHTML = `<div class="s-card"><h2>ครูฝึกอนุญาตแล้ว</h2><p>เตรียมตัวให้พร้อม เมื่อกดเริ่มสอบ เวลาจะเริ่มนับทันที</p>${rules}<button class="btn primary" id="sStart">เริ่มสอบ</button></div>`;
+    $('#sStart').onclick = startExam;
+  } else if (v.state === 'inprogress') {
+    startExam();
+  } else if (v.state === 'done') {
+    const r = v.result;
+    B.innerHTML = `<div class="s-card"><h2>สอบเสร็จแล้ว</h2>
+      <div class="s-total">${r.total}<small> / ${(v.subjects || []).length * 5} คะแนน</small></div>
+      <p>บันทึกคะแนนลงผลการฝึกเรียบร้อยแล้ว</p>
+      <div class="s-result">${(v.subjects || []).map((t, i) => `<div class="row"><span>${esc(t)}</span><b>${r.scores[i]} / 5</b></div>`).join('')}</div>
+      <p>หากต้องการสอบใหม่ ต้องขออนุญาตครูฝึกอีกครั้ง</p>
+      <button class="btn" id="sReq">ขอสอบใหม่</button></div>`;
+    $('#sReq').onclick = studentRequest;
+  }
+}
+async function studentRequest() {
+  try { renderStudent(await api('/exam/request', { method: 'POST' })); }
+  catch (e) { toast(e.message === '409' ? 'อีเมลไม่ตรงกับที่ลงทะเบียนไว้ ติดต่อครูฝึก' : 'ส่งคำขอไม่สำเร็จ ลองใหม่'); }
+}
+async function startExam() {
+  try { renderExam(await api('/exam/start', { method: 'POST' })); }
+  catch { toast('ยังเริ่มสอบไม่ได้ ตรวจสอบกับครูฝึก'); studentRefresh(); }
+}
+
+function renderExam(d) {
+  clearInterval(sPoll); clearInterval(sTick);
+  sId = d.id; sQs = d.questions; sEnd = Date.now() + d.remainingMs;
+  try { sAns = JSON.parse(sessionStorage.getItem('hw_ans_' + sId) || '{}'); } catch { sAns = {}; }
+  const L = ['ก', 'ข', 'ค', 'ง'];
+  sBody().innerHTML = `<div class="timer-bar" id="sBar"><div>เวลาที่เหลือ <b id="sTime">--:--</b></div><div>ตอบแล้ว <b id="sCnt">0</b> / ${sQs.length}</div></div>` +
+    sQs.map((q, n) => `<div class="sq"><h4>ข้อ ${n + 1}. ${esc(q.text)}</h4>${q.options.map((o, j) =>
+      `<label><input type="radio" name="q${q.qid}" value="${j}" data-q="${q.qid}" ${sAns[q.qid] === j ? 'checked' : ''}><span>${L[j]}. ${esc(o)}</span></label>`).join('')}</div>`).join('') +
+    `<button class="btn primary" id="sSubmit">ส่งข้อสอบ</button>`;
+  const count = () => { $('#sCnt').textContent = Object.keys(sAns).length; };
+  sBody().onchange = ev => {
+    const q = ev.target.dataset.q;
+    if (q === undefined) return;
+    sAns[q] = +ev.target.value;
+    try { sessionStorage.setItem('hw_ans_' + sId, JSON.stringify(sAns)); } catch {}
+    count();
+  };
+  $('#sSubmit').onclick = () => submitExam(false);
+  count();
+  const tick = () => {
+    const left = sEnd - Date.now();
+    $('#sTime').textContent = fmtMs(left);
+    $('#sBar').classList.toggle('low', left < 5 * 60000);
+    if (left <= 0) { clearInterval(sTick); toast('หมดเวลา ระบบกำลังส่งข้อสอบ'); submitExam(true); }
+  };
+  sTick = setInterval(tick, 1000);
+  tick();
+  window.scrollTo(0, 0);
+}
+
+async function submitExam(auto) {
+  if (sBusy) return;
+  const left = sQs.length - Object.keys(sAns).length;
+  if (!auto) {
+    const msg = left > 0 ? `ยังไม่ได้ตอบ ${left} ข้อ ส่งข้อสอบเลยหรือไม่? ส่งแล้วแก้ไขไม่ได้` : 'ยืนยันส่งข้อสอบ? ส่งแล้วแก้ไขไม่ได้';
+    if (!confirm(msg)) return;
+  }
+  sBusy = true;
+  const btn = $('#sSubmit'); if (btn) btn.disabled = true;
+  try {
+    const v = await api('/exam/submit', { method: 'POST', body: JSON.stringify({ answers: sAns }) });
+    try { sessionStorage.removeItem('hw_ans_' + sId); } catch {}
+    clearInterval(sTick);
+    renderStudent(v);
+  } catch (e) {
+    if (e.message === '409') { clearInterval(sTick); renderStudent({ state: 'expired' }); }
+    else { toast('ส่งข้อสอบไม่สำเร็จ กดส่งอีกครั้ง'); if (btn) btn.disabled = false; }
+  } finally { sBusy = false; }
+}
+
+/* ---------- 10) เริ่มทำงาน ---------- */
+$$('#lockTabs button').forEach(b => b.addEventListener('click', () => {
+  $$('#lockTabs button').forEach(x => x.classList.toggle('active', x === b));
+  $('#studentForm').hidden = b.dataset.lt !== 'student';
+  $('#lockForm').hidden = b.dataset.lt !== 'staff';
+  $('#lockErr').textContent = '';
+}));
 $('#lockForm').addEventListener('submit', onLogin);
+$('#studentForm').addEventListener('submit', onStudentLogin);
+$('#sLogout').addEventListener('click', logout);
 resume();

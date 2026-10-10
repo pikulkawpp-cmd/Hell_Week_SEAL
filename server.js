@@ -1,40 +1,50 @@
 /* =========================================================
    เซิร์ฟเวอร์กลางของระบบครูฝึก Hell Week (ไม่ต้องติดตั้งแพ็กเกจเพิ่ม)
    รัน:  node server.js     แล้วเปิด http://localhost:3000
-   รหัสผ่านครูฝึก  : HW_PASSWORD (ค่าเริ่มต้น 0104) ดู/บันทึก/แก้ไขได้ แต่ลบไม่ได้
-   รหัสผ่านแอดมิน  : HW_ADMIN_PASSWORD (ต้องตั้ง และต้องไม่ซ้ำรหัสครูฝึก)
-                      เฉพาะแอดมินเท่านั้นที่ลบข้อมูลผู้ฝึกได้ (ตรวจที่เซิร์ฟเวอร์)
-                      ถ้าไม่ตั้ง จะไม่มีใครลบข้อมูลได้เลย
-   ข้อมูลทุกคนเก็บรวมที่ data.json (เปลี่ยนที่เก็บได้ด้วย DATA_DIR)
 
-   เชื่อม Google Sheet (ไม่บังคับ):
-     SHEETS_URL = ลิงก์ Web app ของ Apps Script (ลงท้าย /exec)
-     SHEETS_KEY = รหัสลับเดียวกับ SECRET ใน Apps Script
-   เมื่อเปิดใช้ Sheet จะเป็นฐานข้อมูลหลัก แก้ฝั่งไหนก็ตรงกัน (ต้องใช้ Node 18+)
-   รูปภาพเก็บที่ data.json เท่านั้น ไม่ขึ้น Sheet
+   รหัสผ่าน
+     HW_PASSWORD        รหัสครูฝึก (ค่าเริ่มต้น 0104) ดู/บันทึก/แก้ไข/อนุญาตสอบได้ แต่ลบไม่ได้
+     HW_ADMIN_PASSWORD  รหัสแอดมิน (ต้องตั้ง และต้องไม่ซ้ำรหัสครูฝึก) ลบข้อมูลได้เฉพาะแอดมิน
+   ระบบสอบออนไลน์
+     นักเรียนเข้าด้วยชื่อ+อีเมล → ขอสอบ → ครูฝึกอนุญาต → สอบ → บันทึกคะแนนวิชาการอัตโนมัติ
+     EXAM_MINUTES       เวลาสอบเป็นนาที (ค่าเริ่มต้น 45)
+   เนื้อหาหลักสูตร/เฉลยอยู่ที่ course-data.js และหน้าครูฝึกอยู่ที่ staff.html
+     สองไฟล์นี้ไม่เปิดให้ดาวน์โหลดตรง ส่งให้เฉพาะครูฝึกที่ล็อกอินแล้วเท่านั้น
+
+   เชื่อม Google Sheet (ไม่บังคับ): SHEETS_URL, SHEETS_KEY  (ต้องใช้ Node 18+)
+   ข้อมูลอื่นเก็บที่ data.json และ exam-state.json (เปลี่ยนที่เก็บด้วย DATA_DIR)
    ========================================================= */
 const http = require('http');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
+const COURSE = require('./course-data.js');
 
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.HW_PASSWORD || '0104';
+const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
-const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
-const TOKEN = crypto.createHmac('sha256', 'hellweek-v1').update(PASSWORD).digest('hex');
-const ADMIN_TOKEN = ADMIN_PASSWORD ? crypto.createHmac('sha256', 'hellweek-admin-v1').update(ADMIN_PASSWORD).digest('hex') : '';
+const EXAM_FILE = path.join(DATA_DIR, 'exam-state.json');
+const SHEETS_URL = process.env.SHEETS_URL || '';
+const SHEETS_KEY = process.env.SHEETS_KEY || '';
+const EXAM_MINUTES = Number(process.env.EXAM_MINUTES) || 45;
+const GRACE_MS = 60 * 1000;
+const MAX_BODY = 30 * 1024 * 1024;
+
 if (ADMIN_PASSWORD && ADMIN_PASSWORD === PASSWORD) {
   console.error('ผิดพลาด: HW_ADMIN_PASSWORD ต้องไม่ซ้ำกับ HW_PASSWORD (ไม่งั้นครูทุกคนจะกลายเป็นแอดมิน)');
   process.exit(1);
 }
-const safeEq = (x, y) => { const a = Buffer.from(String(x ?? '')), b = Buffer.from(String(y ?? '')); return a.length === b.length && crypto.timingSafeEqual(a, b); };
-const SHEETS_URL = process.env.SHEETS_URL || '';
-const SHEETS_KEY = process.env.SHEETS_KEY || '';
-const MAX_BODY = 30 * 1024 * 1024;
 
+const hmac = (key, text) => crypto.createHmac('sha256', key).update(text).digest('hex');
+const TOKEN = hmac('hellweek-v1', PASSWORD);
+const ADMIN_TOKEN = ADMIN_PASSWORD ? hmac('hellweek-admin-v1', ADMIN_PASSWORD) : '';
+const SIGN_KEY = hmac('hellweek-student-v1', PASSWORD + '|' + ADMIN_PASSWORD);
+const safeEq = (x, y) => { const a = Buffer.from(String(x ?? '')), b = Buffer.from(String(y ?? '')); return a.length === b.length && crypto.timingSafeEqual(a, b); };
+
+/* หน้าเว็บสาธารณะ (มีแค่หน้าล็อกอินและห้องสอบนักเรียน ไม่มีเนื้อหาหลักสูตร) */
 const STATIC = {
   '/': ['index.html', 'text/html; charset=utf-8'],
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
@@ -42,15 +52,38 @@ const STATIC = {
   '/script.js': ['script.js', 'text/javascript; charset=utf-8']
 };
 
-/* ---------- ข้อมูล ---------- */
+/* ---------- โทเคน ---------- */
+function makeStudentToken(name, email) {
+  const p = Buffer.from(JSON.stringify({ n: name, e: email, t: Date.now() + 12 * 3600 * 1000 })).toString('base64url');
+  return 's.' + p + '.' + hmac(SIGN_KEY, p);
+}
+function parseStudent(h) {
+  const [pre, p, sig] = h.split('.');
+  if (pre !== 's' || !p || !sig || !safeEq(sig, hmac(SIGN_KEY, p))) return null;
+  try {
+    const d = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+    if (Date.now() > d.t) return null;
+    return { role: 'student', name: d.n, email: d.e };
+  } catch { return null; }
+}
+function authed(req) {   // คืนค่า { role: 'admin' | 'user' | 'student', ... } หรือ null
+  const h = (req.headers.authorization || '').replace('Bearer ', '');
+  if (ADMIN_TOKEN && safeEq(h, ADMIN_TOKEN)) return { role: 'admin' };
+  if (safeEq(h, TOKEN)) return { role: 'user' };
+  if (h.startsWith('s.')) return parseStudent(h);
+  return null;
+}
+
+/* ---------- ข้อมูลผู้เข้ารับการฝึก ---------- */
 let records = [];
 try { records = JSON.parse(fs.readFileSync(DATA_FILE, 'utf8')); if (!Array.isArray(records)) records = []; } catch { records = []; }
 
-function persist() {
-  const tmp = DATA_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(records));
-  fs.renameSync(tmp, DATA_FILE);
+function writeJSON(file, data) {
+  const tmp = file + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(data));
+  fs.renameSync(tmp, file);
 }
+const persist = () => writeJSON(DATA_FILE, records);
 function clean(r) {
   if (!r || typeof r !== 'object' || !r.id || typeof r.name !== 'string' || !r.name.trim() || !r.scores || typeof r.scores.total !== 'number') return null;
   r.photos = Array.isArray(r.photos) ? r.photos.filter(p => typeof p === 'string' && p.startsWith('data:image/')).slice(0, 12) : [];
@@ -102,14 +135,80 @@ async function initSheets() {
     lastPull = Date.now();
   } catch (e) { console.log('  เชื่อมต่อ Google Sheet ไม่สำเร็จ:', e.message); }
 }
+async function upsertRecords(incoming) {
+  if (SHEETS_URL) await sheetCall({ action: 'upsert', records: incoming.map(forSheet) });
+  incoming.forEach(r => {
+    const i = records.findIndex(x => String(x.id) === String(r.id));
+    if (i >= 0) records[i] = r; else records.unshift(r);
+  });
+  persist();
+  if (SHEETS_URL) { try { await refresh(true); } catch {} }
+}
 
-/* ---------- ตัวช่วย ---------- */
+/* ---------- ระบบสอบออนไลน์ ---------- */
+let exams = [];
+try { exams = JSON.parse(fs.readFileSync(EXAM_FILE, 'utf8')); if (!Array.isArray(exams)) exams = []; } catch { exams = []; }
+const persistExams = () => { try { writeJSON(EXAM_FILE, exams); } catch {} };
+
+const norm = s => String(s || '').trim().replace(/\s+/g, ' ');
+const skey = (n, e) => norm(n).toLowerCase() + '|' + norm(e).toLowerCase();
+const latestFor = (n, e) => { const k = skey(n, e); for (let i = exams.length - 1; i >= 0; i--) if (skey(exams[i].name, exams[i].email) === k) return exams[i]; return null; };
+const findRecord = name => records.find(r => norm(r.name).toLowerCase() === norm(name).toLowerCase());
+const emailConflict = (name, email) => { const rec = findRecord(name); return !!(rec && rec.email && norm(rec.email).toLowerCase() !== norm(email).toLowerCase()); };
+
+function sweep(r) {
+  if (r && r.state === 'inprogress' && Date.now() > r.deadline + GRACE_MS) { r.state = 'expired'; delete r.session; persistExams(); }
+  return r;
+}
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) { const j = crypto.randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function studentView(r) {
+  if (!r) return { state: 'none', minutes: EXAM_MINUTES, total: COURSE.EXAM.length };
+  sweep(r);
+  const v = { state: r.state, id: r.id, minutes: EXAM_MINUTES, total: COURSE.EXAM.length };
+  if (r.state === 'done') { v.result = r.result; v.subjects = COURSE.SUBJECTS.map(s => s.title); }
+  return v;
+}
+function staffView(r) {
+  sweep(r);
+  return { id: r.id, name: r.name, email: r.email, state: r.state, requestedAt: r.requestedAt, approvedAt: r.approvedAt, approvedBy: r.approvedBy, startedAt: r.startedAt, finishedAt: r.finishedAt, result: r.result };
+}
+const staffList = () => exams.slice(-200).reverse().map(staffView);
+
+function sessionPayload(r) {
+  return {
+    id: r.id,
+    remainingMs: Math.max(0, r.deadline - Date.now()),
+    questions: r.session.map(it => { const q = COURSE.EXAM[it.i]; return { qid: it.i, text: q.q, options: it.order.map(k => q.o[k]) }; })
+  };
+}
+
+async function saveExamResult(r) {
+  try { await refresh(false); } catch {}
+  const sum = r.result.scores.reduce((a, b) => a + b, 0);
+  const acad = r.result.scores.map(String);
+  const round1 = n => Math.round(n * 10) / 10;
+  let rec = findRecord(r.name);
+  if (rec) {
+    const old = rec.scores || {};
+    rec = { ...rec, acad, email: rec.email || r.email, updated: Date.now(),
+      scores: { phys: old.phys || 0, acad: sum, disc: old.disc || 0, total: round1((old.phys || 0) + sum + (old.disc || 0)) } };
+  } else {
+    rec = { id: Date.now(), name: norm(r.name), trainer: 'ระบบสอบออนไลน์',
+      date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }),
+      raw: {}, acad, disc: '', team: '', notes: 'สอบวิชาการออนไลน์', email: r.email, photos: [], updated: Date.now(),
+      scores: { phys: 0, acad: sum, disc: 0, total: sum } };
+  }
+  await upsertRecords([rec]);
+}
+
+/* ---------- ตัวช่วย HTTP ---------- */
 const fails = new Map();
 function send(res, code, body, type = 'application/json; charset=utf-8') {
-  res.writeHead(code, {
-    'Content-Type': type, 'Cache-Control': 'no-store',
-    'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex'
-  });
+  res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'X-Robots-Tag': 'noindex' });
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 function readBody(req) {
@@ -120,12 +219,7 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-function authed(req) {   // คืนค่า 'admin' | 'user' | null
-  const h = (req.headers.authorization || '').replace('Bearer ', '');
-  if (ADMIN_TOKEN && safeEq(h, ADMIN_TOKEN)) return 'admin';
-  if (safeEq(h, TOKEN)) return 'user';
-  return null;
-}
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /* ---------- เซิร์ฟเวอร์ ---------- */
 http.createServer(async (req, res) => {
@@ -138,6 +232,7 @@ http.createServer(async (req, res) => {
       return send(res, 200, fs.readFileSync(path.join(__dirname, file)), type);
     }
 
+    /* ล็อกอินครูฝึก/แอดมิน */
     if (p === '/api/login' && req.method === 'POST') {
       const ip = req.socket.remoteAddress;
       const f = fails.get(ip) || { n: 0, until: 0 };
@@ -151,22 +246,87 @@ http.createServer(async (req, res) => {
       return send(res, 401, { error: 'wrong' });
     }
 
+    /* ล็อกอินนักเรียน (ชื่อ + อีเมล) */
+    if (p === '/api/student/login' && req.method === 'POST') {
+      const b = await readBody(req);
+      const name = norm(b.name), email = norm(b.email);
+      if (name.length < 2 || name.length > 40 || /[<>]/.test(name) || email.length > 80 || !EMAIL_RE.test(email)) return send(res, 400, { error: 'invalid' });
+      await refresh(false).catch(() => {});
+      if (emailConflict(name, email)) return send(res, 409, { error: 'email mismatch' });
+      return send(res, 200, { token: makeStudentToken(name, email), name });
+    }
+
     if (p.startsWith('/api/')) {
-      const role = authed(req);
-      if (!role) return send(res, 401, { error: 'unauthorized' });
+      const who = authed(req);
+      if (!who) return send(res, 401, { error: 'unauthorized' });
+      const role = who.role;
+
+      /* ===== นักเรียน: ทำได้เฉพาะเรื่องสอบของตัวเองเท่านั้น ===== */
+      if (role === 'student') {
+        if (p === '/api/exam/status' && req.method === 'GET') return send(res, 200, studentView(latestFor(who.name, who.email)));
+
+        if (p === '/api/exam/request' && req.method === 'POST') {
+          if (emailConflict(who.name, who.email)) return send(res, 409, { error: 'email mismatch' });
+          let r = sweep(latestFor(who.name, who.email));
+          if (!r || !['pending', 'approved', 'inprogress'].includes(r.state)) {
+            r = { id: Date.now() + '-' + crypto.randomInt(1000, 9999), name: who.name, email: who.email, state: 'pending', requestedAt: Date.now() };
+            exams.push(r); persistExams();
+          }
+          return send(res, 200, studentView(r));
+        }
+
+        if (p === '/api/exam/start' && req.method === 'POST') {
+          const r = sweep(latestFor(who.name, who.email));
+          if (!r || !['approved', 'inprogress'].includes(r.state)) return send(res, 409, { error: 'not approved' });
+          if (r.state === 'approved') {
+            r.session = shuffle(COURSE.EXAM.map((_, i) => i)).map(i => ({ i, order: shuffle([0, 1, 2, 3]) }));
+            r.state = 'inprogress'; r.startedAt = Date.now(); r.deadline = Date.now() + EXAM_MINUTES * 60000;
+            persistExams();
+          }
+          return send(res, 200, sessionPayload(r));
+        }
+
+        if (p === '/api/exam/submit' && req.method === 'POST') {
+          const r = sweep(latestFor(who.name, who.email));
+          if (!r || r.state !== 'inprogress') return send(res, 409, { error: r && r.state === 'expired' ? 'expired' : 'not in progress' });
+          const { answers } = await readBody(req);
+          const ans = answers && typeof answers === 'object' ? answers : {};
+          const scores = COURSE.SUBJECTS.map(() => 0);
+          r.session.forEach(it => {
+            const q = COURSE.EXAM[it.i];
+            const chosen = ans[it.i];
+            if (Number.isInteger(chosen) && chosen >= 0 && chosen <= 3 && it.order[chosen] === q.a) scores[q.s]++;
+          });
+          const done = { ...r, result: { scores, total: scores.reduce((a, b) => a + b, 0) }, state: 'done', finishedAt: Date.now() };
+          await saveExamResult(done);   // ถ้าบันทึกไม่สำเร็จ (เช่น Sheet ล่ม) จะ throw และนักเรียนส่งซ้ำได้
+          Object.assign(r, done); delete r.session; persistExams();
+          return send(res, 200, studentView(r));
+        }
+        return send(res, 403, { error: 'forbidden' });
+      }
+
+      /* ===== ครูฝึก / แอดมิน ===== */
+      if (p === '/api/ui' && req.method === 'GET') return send(res, 200, fs.readFileSync(path.join(__dirname, 'staff.html')), 'text/html; charset=utf-8');
+      if (p === '/api/course' && req.method === 'GET') return send(res, 200, COURSE);
+
+      if (p === '/api/exam/requests' && req.method === 'GET') return send(res, 200, staffList());
+      if ((p === '/api/exam/approve' || p === '/api/exam/deny') && req.method === 'POST') {
+        const { id } = await readBody(req);
+        const r = exams.find(x => x.id === id);
+        if (!r) return send(res, 404, { error: 'not found' });
+        sweep(r);
+        if (p.endsWith('approve') && ['pending', 'denied'].includes(r.state)) { r.state = 'approved'; r.approvedAt = Date.now(); r.approvedBy = role === 'admin' ? 'แอดมิน' : 'ครูฝึก'; }
+        if (p.endsWith('deny') && ['pending', 'approved'].includes(r.state)) { r.state = 'denied'; }
+        persistExams();
+        return send(res, 200, staffList());
+      }
 
       if (p === '/api/records' && req.method === 'GET') { try { await refresh(false); } catch {} return send(res, 200, records); }
 
       if (p === '/api/records' && req.method === 'POST') {
         const body = await readBody(req);
         const incoming = (Array.isArray(body) ? body : [body]).map(clean).filter(Boolean);
-        if (SHEETS_URL) await sheetCall({ action: 'upsert', records: incoming.map(forSheet) });
-        incoming.forEach(r => {
-          const i = records.findIndex(x => String(x.id) === String(r.id));
-          if (i >= 0) records[i] = r; else records.unshift(r);
-        });
-        persist();
-        if (SHEETS_URL) { try { await refresh(true); } catch {} }
+        await upsertRecords(incoming);
         return send(res, 200, records);
       }
 
@@ -180,7 +340,6 @@ http.createServer(async (req, res) => {
         persist();
         return send(res, 200, records);
       }
-
       if (p === '/api/records' && req.method === 'DELETE') {
         if (SHEETS_URL) await sheetCall({ action: 'wipe' });
         records = [];
@@ -199,6 +358,7 @@ http.createServer(async (req, res) => {
     .forEach(i => console.log(`  เครื่องอื่นในเน็ตเดียวกัน: http://${i.address}:${PORT}`));
   console.log(`  ไฟล์ข้อมูล:         ${DATA_FILE}`);
   console.log(ADMIN_PASSWORD ? '  แอดมิน: ตั้งรหัสแอดมินแล้ว (ลบข้อมูลได้เฉพาะแอดมิน)' : '  คำเตือน: ยังไม่ได้ตั้ง HW_ADMIN_PASSWORD จึงไม่มีใครลบข้อมูลได้');
+  console.log(`  ห้องสอบนักเรียน: เวลาสอบ ${EXAM_MINUTES} นาที ข้อสอบ ${COURSE.EXAM.length} ข้อ`);
   console.log(SHEETS_URL ? '  โหมด: เชื่อม Google Sheet' : '  โหมด: เก็บในไฟล์ data.json (ยังไม่ได้ตั้ง SHEETS_URL)');
   initSheets().then(() => console.log(''));
 });
