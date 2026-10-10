@@ -1,7 +1,10 @@
 /* =========================================================
    เซิร์ฟเวอร์กลางของระบบครูฝึก Hell Week (ไม่ต้องติดตั้งแพ็กเกจเพิ่ม)
    รัน:  node server.js     แล้วเปิด http://localhost:3000
-   รหัสผ่านเริ่มต้น 0104 (เปลี่ยนได้ด้วย HW_PASSWORD)
+   รหัสผ่านครูฝึก  : HW_PASSWORD (ค่าเริ่มต้น 0104) ดู/บันทึก/แก้ไขได้ แต่ลบไม่ได้
+   รหัสผ่านแอดมิน  : HW_ADMIN_PASSWORD (ต้องตั้ง และต้องไม่ซ้ำรหัสครูฝึก)
+                      เฉพาะแอดมินเท่านั้นที่ลบข้อมูลผู้ฝึกได้ (ตรวจที่เซิร์ฟเวอร์)
+                      ถ้าไม่ตั้ง จะไม่มีใครลบข้อมูลได้เลย
    ข้อมูลทุกคนเก็บรวมที่ data.json (เปลี่ยนที่เก็บได้ด้วย DATA_DIR)
 
    เชื่อม Google Sheet (ไม่บังคับ):
@@ -20,7 +23,14 @@ const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.HW_PASSWORD || '0104';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
+const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
 const TOKEN = crypto.createHmac('sha256', 'hellweek-v1').update(PASSWORD).digest('hex');
+const ADMIN_TOKEN = ADMIN_PASSWORD ? crypto.createHmac('sha256', 'hellweek-admin-v1').update(ADMIN_PASSWORD).digest('hex') : '';
+if (ADMIN_PASSWORD && ADMIN_PASSWORD === PASSWORD) {
+  console.error('ผิดพลาด: HW_ADMIN_PASSWORD ต้องไม่ซ้ำกับ HW_PASSWORD (ไม่งั้นครูทุกคนจะกลายเป็นแอดมิน)');
+  process.exit(1);
+}
+const safeEq = (x, y) => { const a = Buffer.from(String(x ?? '')), b = Buffer.from(String(y ?? '')); return a.length === b.length && crypto.timingSafeEqual(a, b); };
 const SHEETS_URL = process.env.SHEETS_URL || '';
 const SHEETS_KEY = process.env.SHEETS_KEY || '';
 const MAX_BODY = 30 * 1024 * 1024;
@@ -110,10 +120,11 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
-function authed(req) {
+function authed(req) {   // คืนค่า 'admin' | 'user' | null
   const h = (req.headers.authorization || '').replace('Bearer ', '');
-  const a = Buffer.from(h), b = Buffer.from(TOKEN);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  if (ADMIN_TOKEN && safeEq(h, ADMIN_TOKEN)) return 'admin';
+  if (safeEq(h, TOKEN)) return 'user';
+  return null;
 }
 
 /* ---------- เซิร์ฟเวอร์ ---------- */
@@ -132,8 +143,8 @@ http.createServer(async (req, res) => {
       const f = fails.get(ip) || { n: 0, until: 0 };
       if (Date.now() < f.until) return send(res, 429, { error: 'blocked' });
       const { password } = await readBody(req);
-      const a = Buffer.from(String(password ?? '')), b = Buffer.from(PASSWORD);
-      if (a.length === b.length && crypto.timingSafeEqual(a, b)) { fails.delete(ip); return send(res, 200, { token: TOKEN }); }
+      if (ADMIN_PASSWORD && safeEq(password, ADMIN_PASSWORD)) { fails.delete(ip); return send(res, 200, { token: ADMIN_TOKEN, role: 'admin' }); }
+      if (safeEq(password, PASSWORD)) { fails.delete(ip); return send(res, 200, { token: TOKEN, role: 'user' }); }
       f.n++;
       if (f.n >= 5) { f.until = Date.now() + 60000; f.n = 0; }
       fails.set(ip, f);
@@ -141,7 +152,8 @@ http.createServer(async (req, res) => {
     }
 
     if (p.startsWith('/api/')) {
-      if (!authed(req)) return send(res, 401, { error: 'unauthorized' });
+      const role = authed(req);
+      if (!role) return send(res, 401, { error: 'unauthorized' });
 
       if (p === '/api/records' && req.method === 'GET') { try { await refresh(false); } catch {} return send(res, 200, records); }
 
@@ -157,6 +169,9 @@ http.createServer(async (req, res) => {
         if (SHEETS_URL) { try { await refresh(true); } catch {} }
         return send(res, 200, records);
       }
+
+      // ลบข้อมูล: เฉพาะแอดมินเท่านั้น
+      if (req.method === 'DELETE' && role !== 'admin') return send(res, 403, { error: 'admin only' });
 
       if (p.startsWith('/api/records/') && req.method === 'DELETE') {
         const id = decodeURIComponent(p.split('/').pop());
@@ -183,6 +198,7 @@ http.createServer(async (req, res) => {
   Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal)
     .forEach(i => console.log(`  เครื่องอื่นในเน็ตเดียวกัน: http://${i.address}:${PORT}`));
   console.log(`  ไฟล์ข้อมูล:         ${DATA_FILE}`);
+  console.log(ADMIN_PASSWORD ? '  แอดมิน: ตั้งรหัสแอดมินแล้ว (ลบข้อมูลได้เฉพาะแอดมิน)' : '  คำเตือน: ยังไม่ได้ตั้ง HW_ADMIN_PASSWORD จึงไม่มีใครลบข้อมูลได้');
   console.log(SHEETS_URL ? '  โหมด: เชื่อม Google Sheet' : '  โหมด: เก็บในไฟล์ data.json (ยังไม่ได้ตั้ง SHEETS_URL)');
   initSheets().then(() => console.log(''));
 });

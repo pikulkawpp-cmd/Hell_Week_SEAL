@@ -52,8 +52,11 @@ nav button{text-align:left;padding:10px 14px;background:transparent;border:0;bor
 nav button:hover{color:var(--bone);background:rgba(255,255,255,.04)}
 nav button.active{color:var(--bone);background:var(--panel);border-left-color:var(--signal)}
 .logout{align-self:flex-start}
-.mode{margin-top:auto;display:inline-block;align-self:flex-start;font-size:.8rem;padding:2px 10px;border-radius:20px;margin-bottom:10px}
+.mode{margin-top:auto;display:inline-block;align-self:flex-start;font-size:.8rem;padding:2px 10px;border-radius:20px;margin-bottom:6px}
 .mode.server{background:rgba(47,181,163,.18);color:var(--teal)}
+.role{display:inline-block;align-self:flex-start;font-size:.8rem;padding:2px 10px;border-radius:20px;margin-bottom:10px}
+.role.admin{background:rgba(255,107,44,.2);color:var(--signal)}
+.role.user{background:rgba(143,169,181,.18);color:var(--steel)}
 .mode.local{background:rgba(232,176,47,.18);color:var(--amber)}
 
 .content{padding:34px clamp(18px,4vw,48px) 70px;max-width:1120px;width:100%}
@@ -191,7 +194,7 @@ dialog img{max-width:100%;max-height:76vh;display:block;margin:0 auto 12px}
   nav button{border-left:0;border-bottom:3px solid transparent;border-radius:0;white-space:nowrap}
   nav button.active{border-bottom-color:var(--signal)}
   .logout{margin:0 0 0 auto}
-  .mode{margin:0}
+  .mode,.role{margin:0}
   .record-layout{grid-template-columns:1fr}
   .live{position:static}
   .row2{grid-template-columns:1fr}

@@ -41,6 +41,7 @@
       <button data-view="settings">ตั้งค่า</button>
     </nav>
     <span class="mode" id="modeBadge"></span>
+    <span class="role" id="roleBadge"></span>
     <button class="btn small logout" id="logoutBtn">ออกจากระบบ</button>
   </aside>
 
@@ -198,6 +199,7 @@
           <div class="progress"><div id="storageBar"></div></div>
           <p class="sub small">โหมดเครื่องนี้เก็บได้ราว 5 MB ถ้าเต็มให้สำรอง JSON แล้วลบรายการเก่า</p>
           <button class="btn danger" id="wipeBtn">ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด</button>
+          <p class="sub small" id="wipeNote" hidden>การลบข้อมูลผู้เข้ารับการฝึกทำได้เฉพาะแอดมิน ล็อกอินด้วยรหัสแอดมินเพื่อใช้งาน</p>
         </div>
       </div>
     </section>

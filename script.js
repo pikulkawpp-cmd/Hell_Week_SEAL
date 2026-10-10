@@ -113,6 +113,8 @@ const EXAM = [
 
 const STORE_KEY = 'hellweek_records_v1';
 const TOKEN_KEY = 'hellweek_token';
+const LOCAL_ADMIN_PASS = '9999';   // รหัสแอดมินของโหมดเปิดไฟล์ตรง ๆ (ไม่มีเซิร์ฟเวอร์) เปลี่ยนได้ แต่โหมดนี้ไม่ปลอดภัยจริง
+const ROLE_KEY = 'hellweek_role';
 const LOCAL_PASS = '0104';   // ใช้เฉพาะโหมดเปิดไฟล์ตรง ๆ (ไม่มีเซิร์ฟเวอร์)
 const SESSION_KEY = 'hellweek_session';
 
@@ -145,6 +147,8 @@ function gradeOf(total) {
    MODE 'local'  = เปิดไฟล์ตรง ๆ เก็บ localStorage เฉพาะเครื่องนี้ */
 let MODE = 'local';
 let TOKEN = sessionStorage.getItem(TOKEN_KEY) || '';
+let ROLE = sessionStorage.getItem(ROLE_KEY) || 'user';
+const isAdmin = () => ROLE === 'admin';
 let CACHE = load(STORE_KEY, []);
 let syncTimer = null, lastSig = '';
 
@@ -155,6 +159,7 @@ const fixScores = list => list.map(r => ({ ...r, scores: scoresOf(r) }));
 async function api(path, opt = {}) {
   const res = await fetch('/api' + path, { ...opt, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN } });
   if (res.status === 401) { logout(); throw new Error('401'); }
+  if (res.status === 403) throw new Error('403');
   if (!res.ok) throw new Error(String(res.status));
   return res.json();
 }
@@ -177,18 +182,20 @@ async function upsertRecords(recs) {
   } catch { return false; }
 }
 async function deleteRecord(id) {
+  if (!isAdmin()) { toast('ลบข้อมูลได้เฉพาะแอดมิน'); return; }
   try {
     if (MODE === 'server') CACHE = fixScores(await api('/records/' + encodeURIComponent(id), { method: 'DELETE' }));
     else { CACHE = CACHE.filter(r => r.id != id); save(STORE_KEY, CACHE); }
     lastSig = sigOf(CACHE);
-  } catch { toast('ลบไม่สำเร็จ'); }
+  } catch (e) { toast(e.message === '403' ? 'ลบข้อมูลได้เฉพาะแอดมิน' : 'ลบไม่สำเร็จ'); }
 }
 async function wipeAll() {
+  if (!isAdmin()) { toast('ลบข้อมูลได้เฉพาะแอดมิน'); return; }
   try {
     if (MODE === 'server') CACHE = fixScores(await api('/records', { method: 'DELETE' }));
     else { CACHE = []; localStorage.removeItem(STORE_KEY); }
     lastSig = '';
-  } catch { toast('ลบไม่สำเร็จ'); }
+  } catch (e) { toast(e.message === '403' ? 'ลบข้อมูลได้เฉพาะแอดมิน' : 'ลบไม่สำเร็จ'); }
 }
 async function sync() {
   if (MODE !== 'server' || document.hidden) return;
@@ -222,8 +229,10 @@ async function onLogin(e) {
   try { res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass }) }); } catch {}
 
   if (res && res.ok) {
-    TOKEN = (await res.json()).token;
+    const d = await res.json();
+    TOKEN = d.token; ROLE = d.role === 'admin' ? 'admin' : 'user';
     sessionStorage.setItem(TOKEN_KEY, TOKEN);
+    sessionStorage.setItem(ROLE_KEY, ROLE);
     MODE = 'server';
     try { await pull(); } catch { $('#lockErr').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'; return; }
     return enterApp();
@@ -231,7 +240,9 @@ async function onLogin(e) {
   if (res && res.status === 401) return showWrong();
   if (res && res.status === 429) { $('#lockErr').textContent = 'ลองผิดหลายครั้ง รอ 1 นาทีแล้วลองใหม่'; return; }
   // ไม่มีเซิร์ฟเวอร์ → โหมดเครื่องนี้
-  if (pass !== LOCAL_PASS) return showWrong();
+  if (pass !== LOCAL_PASS && pass !== LOCAL_ADMIN_PASS) return showWrong();
+  ROLE = pass === LOCAL_ADMIN_PASS ? 'admin' : 'user';
+  sessionStorage.setItem(ROLE_KEY, ROLE);
   MODE = 'local';
   CACHE = load(STORE_KEY, []);
   enterApp();
@@ -241,6 +252,10 @@ function enterApp() {
   sessionStorage.setItem(SESSION_KEY, '1');
   document.body.classList.remove('locked');
   $('#app').hidden = false;
+  $('#roleBadge').textContent = isAdmin() ? 'แอดมิน (ลบข้อมูลได้)' : 'ครูฝึก (ลบข้อมูลไม่ได้)';
+  $('#roleBadge').className = 'role ' + ROLE;
+  $('#wipeBtn').hidden = !isAdmin();
+  $('#wipeNote').hidden = isAdmin();
   $('#modeBadge').className = 'mode ' + MODE;
   $('#modeBadge').textContent = MODE === 'server' ? 'ข้อมูลร่วมทุกเครื่อง' : 'เก็บเฉพาะเครื่องนี้';
   $('#modeInfo').textContent = MODE === 'server'
@@ -254,7 +269,8 @@ function enterApp() {
 function logout() {
   sessionStorage.removeItem(SESSION_KEY);
   sessionStorage.removeItem(TOKEN_KEY);
-  TOKEN = '';
+  sessionStorage.removeItem(ROLE_KEY);
+  TOKEN = ''; ROLE = 'user';
   clearInterval(syncTimer);
   location.hash = '';
   document.body.classList.add('locked');
@@ -516,7 +532,7 @@ function renderRecords() {
       <td><div class="acts">
         <button class="btn small primary" data-img="${r.id}">ภาพรายงาน</button>
         <button class="btn small" data-edit="${r.id}">แก้ไข</button>
-        <button class="btn small" data-rm="${r.id}">ลบ</button></div></td></tr>`;
+        ${isAdmin() ? `<button class="btn small danger" data-rm="${r.id}">ลบ</button>` : ''}</div></td></tr>`;
   }).join('') : `<tr><td class="empty" colspan="7">ไม่พบรายการ</td></tr>`;
 }
 async function onTableClick(e) {
@@ -528,6 +544,7 @@ async function onTableClick(e) {
     if (r) { show('record'); fillForm(r); toast('โหลดข้อมูลมาแก้ไขแล้ว'); }
   }
   if (e.target.dataset.rm) {
+    if (!isAdmin()) { toast('ลบข้อมูลได้เฉพาะแอดมิน'); return; }
     const r = find(e.target.dataset.rm);
     if (r && confirm(`ลบผลของ ${r.name}?`)) { await deleteRecord(r.id); renderRecords(); }
   }
@@ -587,6 +604,7 @@ function renderStorage() {
   $('#storageBar').style.background = MODE === 'local' && mb > 4 ? 'var(--red)' : 'var(--teal)';
 }
 async function wipe() {
+  if (!isAdmin()) { toast('ลบข้อมูลได้เฉพาะแอดมิน'); return; }
   const warn = MODE === 'server' ? 'ลบข้อมูลผู้เข้ารับการฝึก "ของทุกเครื่อง" ทั้งหมด? ย้อนกลับไม่ได้' : 'ลบข้อมูลผู้เข้ารับการฝึกทั้งหมด? ย้อนกลับไม่ได้';
   if (confirm(warn) && confirm('ยืนยันอีกครั้ง ลบทั้งหมดจริงหรือไม่?')) {
     await wipeAll();
