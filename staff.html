@@ -36,17 +36,19 @@
     <section class="view" id="v-course" hidden>
       <header class="page-head"><div><h2>คู่มือหลักสูตร Hell Week</h2><p>ใช้อ้างอิงขณะสอนและให้คะแนน</p></div></header>
       <div class="tabs" id="courseTabs">
-        <button data-tab="physical" class="active">หมวดกายภาพ</button>
+        <button data-tab="hellweek" class="active">Hell Week</button>
+        <button data-tab="interview">สัมภาษณ์</button>
+        <button data-tab="ndu">นทต</button>
+        <button data-tab="cqb">CQB</button>
         <button data-tab="academic">หมวดวิชาการ</button>
         <button data-tab="grading">เกณฑ์ผ่าน</button>
         <button data-tab="exam">คลังข้อสอบพร้อมเฉลย</button>
       </div>
 
-      <div class="pane" id="tab-physical">
-        <p class="sub">7 ด่าน รวม 50 คะแนน ครูฝึกนับและบันทึกผลเอง</p>
-        <div class="stations" id="stationGrid"></div>
-        <p class="note">หมายเหตุ: จำนวนครั้งเป็นข้อกำหนดของหลักสูตรในเกม ไม่ใช่เกณฑ์ความปลอดภัยสำหรับการฝึกร่างกายจริง หากนำไปใช้กับผู้เล่นจริง ควรแบ่งเป็นช่วง มีเวลาพัก และให้หยุดได้เมื่อไม่พร้อม</p>
-      </div>
+      <div class="pane" id="tab-hellweek"></div>
+      <div class="pane" id="tab-interview" hidden></div>
+      <div class="pane" id="tab-ndu" hidden></div>
+      <div class="pane" id="tab-cqb" hidden></div>
 
       <div class="pane" id="tab-academic" hidden>
         <p class="sub">6 วิชา วิชาละ 5 คะแนน รวม 30 คะแนน</p>
@@ -159,7 +161,7 @@
       <div class="archive-bar">
         <input id="search" type="search" placeholder="ค้นหาชื่อ Roblox">
         <select id="filterGrade" aria-label="กรองผล">
-          <option value="">ทุกผล</option><option value="pass">ผ่าน</option><option value="wait">รอประเมินซ้ำ</option><option value="fail">ไม่ผ่าน</option>
+          <option value="">ทุกผล</option><option value="pass">ผ่าน</option><option value="wait">รอประเมินซ้ำ</option><option value="fail">ไม่ผ่าน</option><option value="none">ยังไม่ประเมิน</option>
         </select>
         <button class="btn" id="csvBtn">ส่งออก CSV</button>
         <button class="btn" id="jsonBtn">สำรอง JSON</button>

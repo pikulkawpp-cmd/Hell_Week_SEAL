@@ -6,7 +6,7 @@
 
 /* ---------- 1) ข้อมูลหลักสูตร (แก้ตัวเลขได้ที่นี่) ---------- */
 // ข้อมูลหลักสูตรและข้อสอบถูกส่งจากเซิร์ฟเวอร์หลังครูฝึกล็อกอินเท่านั้น (ดู loadCourse)
-let STATIONS = [], SUBJECTS = [], GLOSSARY = [], EXAM = [];
+let STATIONS = [], SUBJECTS = [], GLOSSARY = [], EXAM = [], COURSES = [];
 
 const STORE_KEY = 'hellweek_records_v1';
 const TOKEN_KEY = 'hellweek_token';
@@ -37,6 +37,13 @@ function gradeOf(total) {
   return { key: 'fail', text: 'ไม่ผ่านหลักสูตร', short: 'ไม่ผ่าน', color: '#e0544f', css: 'var(--red)' };
 }
 
+// รายชื่อที่ยังไม่มีผลกรอกเลย (เช่น เพิ่มชื่อไว้ล่วงหน้า) ไม่นับเป็น "ไม่ผ่าน"
+const hasVal = v => String(v ?? '').trim() !== '';
+const isBlank = r => !Object.values(r.raw || {}).some(hasVal) && !(r.acad || []).some(hasVal) && !hasVal(r.disc) && !hasVal(r.team);
+const gradeOfRec = r => isBlank(r)
+  ? { key: 'none', text: 'ยังไม่ประเมิน', short: 'ยังไม่ประเมิน', color: '#8fa9b5', css: 'var(--steel)' }
+  : gradeOf(r.scores.total);
+
 /* ---------- 3) ข้อมูลร่วมกันทุกเครื่อง + ล็อกอิน ----------
    MODE 'server' = รันผ่าน server.js ทุกเครื่องเห็นข้อมูลชุดเดียวกัน
    MODE 'local'  = เปิดไฟล์ตรง ๆ เก็บ localStorage เฉพาะเครื่องนี้ */
@@ -60,7 +67,7 @@ async function api(path, opt = {}) {
 }
 async function loadCourse() {
   const d = await api('/course');
-  STATIONS = d.STATIONS; SUBJECTS = d.SUBJECTS; GLOSSARY = d.GLOSSARY; EXAM = d.EXAM;
+  STATIONS = d.STATIONS; SUBJECTS = d.SUBJECTS; GLOSSARY = d.GLOSSARY; EXAM = d.EXAM; COURSES = d.COURSES || [];
 }
 async function pull() {
   CACHE = fixScores(await api('/records'));
@@ -199,30 +206,52 @@ function show(view) {
 
 function renderDashboard() {
   const list = getRecords();
-  const c = { pass: 0, wait: 0, fail: 0 };
-  list.forEach(r => c[gradeOf(r.scores.total).key]++);
-  const avg = list.length ? round1(list.reduce((a, r) => a + r.scores.total, 0) / list.length) : 0;
+  const c = { pass: 0, wait: 0, fail: 0, none: 0 };
+  list.forEach(r => c[gradeOfRec(r).key]++);
+  const graded = list.filter(r => !isBlank(r));
+  const avg = graded.length ? round1(graded.reduce((a, r) => a + r.scores.total, 0) / graded.length) : 0;
   $('#stats').innerHTML = `
     <div class="stat"><b>${list.length}</b><span>ผู้เข้ารับการฝึกทั้งหมด</span></div>
+    <div class="stat none"><b>${c.none}</b><span>ยังไม่ประเมิน</span></div>
     <div class="stat pass"><b>${c.pass}</b><span>ผ่าน</span></div>
     <div class="stat wait"><b>${c.wait}</b><span>รอประเมินซ้ำ</span></div>
     <div class="stat fail"><b>${c.fail}</b><span>ไม่ผ่าน</span></div>
     <div class="stat avg"><b>${avg}</b><span>คะแนนเฉลี่ย / 100</span></div>`;
-  $('#splitBar').innerHTML = list.length
+  $('#splitBar').innerHTML = graded.length
     ? `<i style="flex:${c.pass};background:var(--teal)"></i><i style="flex:${c.wait};background:var(--amber)"></i><i style="flex:${c.fail};background:var(--red)"></i>` : '';
   const recent = [...list].sort((a, b) => b.id - a.id).slice(0, 5);
   $('#recentList').innerHTML = recent.length ? recent.map(r => {
-    const g = gradeOf(r.scores.total);
+    const g = gradeOfRec(r);
     return `<div class="recent-item"><div>${esc(r.name)}<small>${esc(r.date || '-')} · ครูฝึก ${esc(r.trainer || '-')}</small></div>
-      <b>${r.scores.total}/100</b><span class="tag ${g.key}">${g.short}</span></div>`;
+      <b>${isBlank(r) ? '-' : r.scores.total + '/100'}</b><span class="tag ${g.key}">${g.short}</span></div>`;
   }).join('') : `<div class="empty-box">ยังไม่มีบันทึก กด "บันทึกผลใหม่" เพื่อเริ่ม</div>`;
 }
 
+function stationCards() {
+  const total = STATIONS.reduce((a, x) => a + x.pts, 0);
+  return `<section class="c-sec"><h4>การให้คะแนนหมวดกายภาพ (รวม ${total} คะแนน)</h4>
+    <p class="sub">${STATIONS.length} ด่าน ครูฝึกนับและบันทึกผลเอง</p>
+    <div class="stations">${STATIONS.map(x => `
+      <article class="station"><span class="pts">${x.pts} คะแนน</span>
+        <div class="target">${x.min === x.full ? x.min : x.min + '–' + x.full}<span>${esc(x.unit)}</span></div>
+        <h4>${esc(x.name)}</h4><p>${esc(x.note)}</p></article>`).join('')}</div>
+    <p class="note">วิธีให้คะแนน: ครูฝึกกรอกว่านักเรียนทำได้เท่าไร และกำหนดเต็มเท่าไร (ตั้งได้ตามช่วงบนการ์ด ถ้าไม่กรอกจะใช้ค่าสูงสุด) คะแนนของด่าน = ทำได้ ÷ เต็ม x คะแนนด่าน เช่น เต็ม 500 ทำได้ 250 = ครึ่งหนึ่งของ 5 คะแนน</p></section>`;
+}
 function renderCourse() {
-  $('#stationGrid').innerHTML = STATIONS.map(s => `
-    <article class="station"><span class="pts">${s.max} คะแนน</span>
-      <div class="target">${s.target ?? 'ปฏิบัติ'}<span>${s.target ? s.unit : ''}</span></div>
-      <h4>${esc(s.name)}</h4><p>${esc(s.note)}</p></article>`).join('');
+  COURSES.forEach(c => {
+    const pane = $('#tab-' + c.id);
+    if (!pane) return;
+    const tag = x => x.ordered ? 'ol' : 'ul';
+    pane.innerHTML = `<h3 class="c-title">${esc(c.title)}</h3>` +
+      (c.subtitle ? `<p class="sub">${esc(c.subtitle)}</p>` : '') +
+      (c.intro ? `<div class="why">${esc(c.intro)}</div>` : '') +
+      (c.id === 'hellweek' ? stationCards() : '') +
+      c.sections.map(x => `<section class="c-sec"><h4>${esc(x.heading)}</h4>` +
+        (x.text ? `<p>${esc(x.text)}</p>` : '') +
+        (x.items ? `<${tag(x)} class="c-list">${x.items.map((i, n) => `<li data-no="${i && i.no ? i.no : n + 1}">${esc(i && i.text ? i.text : i)}</li>`).join('')}</${tag(x)}>` : '') +
+        `</section>`).join('') +
+      (c.note ? `<p class="note">${esc(c.note)}</p>` : '');
+  });
 
   $('#subjectList').innerHTML = SUBJECTS.map(s => `
     <details class="subject"><summary>${esc(s.title)} <span class="badge">5 คะแนน</span></summary>
@@ -251,10 +280,11 @@ function renderCourse() {
 /* ---------- 5) ฟอร์มบันทึกผล ---------- */
 function buildForm() {
   $('#physInputs').innerHTML = STATIONS.map(s => `
-    <div class="irow">
-      <div class="nm">${esc(s.name)}<small>${s.target ? `เป้าหมาย ${s.target} ${s.unit}` : 'ให้คะแนนตรง ๆ'} · เต็ม ${s.max}</small></div>
-      <input type="number" min="0" ${s.target ? '' : `max="${s.max}" step="0.5"`} id="in-${s.id}" placeholder="${s.target ? s.unit : 'คะแนน'}" aria-label="${esc(s.name)}">
-      <div class="sc"><span id="sc-${s.id}">0</span>/${s.max}</div>
+    <div class="irow irow4">
+      <div class="nm">${esc(s.name)}<small>ตั้งเต็มได้ ${s.min === s.full ? s.min : s.min + '–' + s.full} ${s.unit} (เว้นว่าง = ${s.full}) · ${s.pts} คะแนน</small></div>
+      <input type="number" min="0" step="any" id="in-${s.id}" placeholder="ทำได้" aria-label="${esc(s.name)} ทำได้">
+      <input type="number" min="0" step="any" id="fu-${s.id}" placeholder="เต็ม ${s.full}" aria-label="${esc(s.name)} เต็ม">
+      <div class="sc"><span id="sc-${s.id}">0</span>/${s.pts}</div>
     </div>`).join('');
   $('#acadInputs').innerHTML = SUBJECTS.map((s, i) => `
     <div class="irow">
@@ -272,14 +302,13 @@ function buildForm() {
   $$('#form input[type=number]').forEach(i => i.addEventListener('input', recalc));
 }
 
-const stationScoreOf = (s, raw) => {
-  const v = num(raw);
-  return s.target ? round1(clamp(v / s.target, 0, 1) * s.max) : clamp(v, 0, s.max);
-};
-const stationScore = s => stationScoreOf(s, $('#in-' + s.id).value);
+// คะแนน = ทำได้ ÷ เต็ม x คะแนนเต็มของด่าน (ไม่เกินคะแนนเต็ม) ถ้าไม่กรอก "เต็ม" ใช้ค่าสูงสุดของด่านนั้น
+const stationFull = (s, full) => num(full) > 0 ? num(full) : s.full;
+const stationScoreOf = (s, raw, full) => round1(s.pts * clamp(num(raw) / stationFull(s, full), 0, 1));
+const stationScore = s => stationScoreOf(s, $('#in-' + s.id).value, $('#fu-' + s.id).value);
 
 function scoresOf(rec) {
-  const phys = STATIONS.reduce((a, s) => a + stationScoreOf(s, rec.raw?.[s.id]), 0);
+  const phys = STATIONS.reduce((a, s) => a + stationScoreOf(s, rec.raw?.[s.id], rec.full?.[s.id]), 0);
   const acad = SUBJECTS.reduce((a, _, i) => a + clamp(num(rec.acad?.[i]), 0, 5), 0);
   const disc = clamp(num(rec.disc), 0, 10) + clamp(num(rec.team), 0, 10);
   return { phys: round1(phys), acad: round1(acad), disc: round1(disc), total: round1(phys + acad + disc) };
@@ -368,13 +397,14 @@ let editingId = null;
 
 function collectRecord() {
   const raw = {};
-  STATIONS.forEach(s => raw[s.id] = $('#in-' + s.id).value);
+  const full = {};
+  STATIONS.forEach(s => { raw[s.id] = $('#in-' + s.id).value; full[s.id] = $('#fu-' + s.id).value; });
   const rec = {
     id: editingId || Date.now(),
     name: $('#traineeName').value.trim(),
     trainer: $('#trainerName').value.trim(),
     date: $('#trainDate').value,
-    raw,
+    raw, full,
     acad: SUBJECTS.map((_, i) => $('#ac-' + i).value),
     disc: $('#dc-disc').value,
     team: $('#dc-team').value,
@@ -393,7 +423,7 @@ function fillForm(r) {
   $('#traineeName').value = r.name;
   $('#trainerName').value = r.trainer || '';
   $('#trainDate').value = r.date || '';
-  STATIONS.forEach(s => $('#in-' + s.id).value = r.raw?.[s.id] ?? '');
+  STATIONS.forEach(s => { $('#in-' + s.id).value = r.raw?.[s.id] ?? ''; $('#fu-' + s.id).value = r.full?.[s.id] ?? ''; });
   SUBJECTS.forEach((_, i) => $('#ac-' + i).value = r.acad?.[i] ?? '');
   $('#dc-disc').value = r.disc ?? '';
   $('#dc-team').value = r.team ?? '';
@@ -438,11 +468,11 @@ async function onSubmit(e) {
 function renderRecords() {
   const q = $('#search').value.trim().toLowerCase();
   const gf = $('#filterGrade').value;
-  const list = getRecords().filter(r => r.name.toLowerCase().includes(q) && (!gf || gradeOf(r.scores.total).key === gf));
+  const list = getRecords().filter(r => r.name.toLowerCase().includes(q) && (!gf || gradeOfRec(r).key === gf));
   $('#recordBody').innerHTML = list.length ? list.map(r => {
-    const g = gradeOf(r.scores.total);
+    const g = gradeOfRec(r);
     return `<tr><td>${esc(r.name)}</td><td>${esc(r.trainer || '-')}</td><td>${esc(r.date || '-')}</td>
-      <td>${r.scores.total} / 100</td><td><span class="tag ${g.key}">${g.short}</span></td><td>${(r.photos || []).length}</td>
+      <td>${isBlank(r) ? '-' : r.scores.total + ' / 100'}</td><td><span class="tag ${g.key}">${g.short}</span></td><td>${(r.photos || []).length}</td>
       <td><div class="acts">
         <button class="btn small primary" data-img="${r.id}">ภาพรายงาน</button>
         <button class="btn small" data-edit="${r.id}">แก้ไข</button>
@@ -475,7 +505,7 @@ function exportCSV() {
   const list = getRecords();
   if (!list.length) return toast('ยังไม่มีข้อมูล');
   const head = ['ชื่อ Roblox', 'ครูฝึก', 'วันที่', 'กายภาพ/50', 'วิชาการ/30', 'วินัยและทีม/20', 'รวม/100', 'ผล', 'หมายเหตุ'];
-  const rows = list.map(r => [r.name, r.trainer, r.date, r.scores.phys, r.scores.acad, r.scores.disc, r.scores.total, gradeOf(r.scores.total).text, r.notes]);
+  const rows = list.map(r => [r.name, r.trainer, r.date, r.scores.phys, r.scores.acad, r.scores.disc, r.scores.total, gradeOfRec(r).text, r.notes]);
   const csv = [head, ...rows].map(row => row.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n');
   download('hellweek-results.csv', '\ufeff' + csv, 'text/csv;charset=utf-8');
 }
@@ -498,7 +528,7 @@ function copyDiscord() {
   const text = [
     '**📋 ผลการฝึก Hell Week**',
     `ผู้เข้ารับการฝึก: ${r.name || '-'}`, `ครูฝึกผู้ประเมิน: ${r.trainer || '-'}`, `วันที่: ${r.date || '-'}`, '',
-    ...STATIONS.map(s => `- ${s.name}: ${stationScoreOf(s, r.raw[s.id])}/${s.max}`),
+    ...STATIONS.map(s => `- ${s.name} (${num(r.raw[s.id])}/${stationFull(s, r.full?.[s.id])} ${s.unit}): ${stationScoreOf(s, r.raw[s.id], r.full?.[s.id])}/${s.pts}`),
     `**หมวดกายภาพ: ${r.scores.phys}/50**`, `**หมวดวิชาการ: ${r.scores.acad}/30**`, `**วินัยและทีม: ${r.scores.disc}/20**`,
     `**รวม: ${r.scores.total}/100 → ${g.text}**`, r.notes ? `หมายเหตุ: ${r.notes}` : ''
   ].filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
@@ -621,7 +651,7 @@ async function buildReport(rec) {
       y += 52;
     });
     heading('ผลหมวดกายภาพ');
-    table(STATIONS.map(s => [s.name, s.target ? `${num(rec.raw?.[s.id])} / ${s.target} ${s.unit}` : 'ครูฝึกให้คะแนน', `${stationScoreOf(s, rec.raw?.[s.id])} / ${s.max}`]));
+    table(STATIONS.map(s => [s.name, `${num(rec.raw?.[s.id])} / ${stationFull(s, rec.full?.[s.id])} ${s.unit}`, `${stationScoreOf(s, rec.raw?.[s.id], rec.full?.[s.id])} / ${s.pts}`]));
     heading('ผลหมวดวิชาการ');
     table(SUBJECTS.map((s, i) => [s.title.replace(' — ', ' '), '', `${clamp(num(rec.acad?.[i]), 0, 5)} / 5`]));
     heading('วินัยและการทำงานเป็นทีม');

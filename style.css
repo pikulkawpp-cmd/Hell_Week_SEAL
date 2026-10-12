@@ -88,7 +88,6 @@ h3{font-size:1.25rem;margin:30px 0 12px}
 .tabs button.active{color:var(--bone);border-bottom-color:var(--signal)}
 .stations{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
 .station{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative}
-.station:last-child{border-color:var(--signal)}
 .station .target{font-family:'Kanit';font-size:2.2rem;font-weight:800;color:var(--signal);line-height:1.1}
 .station .target span{font-size:1rem;color:var(--steel);font-weight:400;margin-left:6px}
 .station h4{font-family:'Kanit';font-size:1.1rem;margin:6px 0 4px}
@@ -245,3 +244,19 @@ dialog img{max-width:100%;max-height:76vh;display:block;margin:0 auto 12px}
 .s-result .row b{font-family:'Kanit';color:var(--teal)}
 .s-total{font-family:'Kanit';font-size:3rem;font-weight:800;line-height:1}
 .s-total small{font-size:1.1rem;color:var(--steel);font-weight:400}
+
+.tag.none{background:rgba(143,169,181,.2);color:var(--steel)}
+
+/* ---------- คู่มือหลักสูตร ---------- */
+.c-title{margin:0 0 4px;font-size:1.6rem}
+.c-sec{margin-top:26px}
+.c-sec h4{font-family:'Kanit';font-size:1.15rem;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.c-sec p{color:var(--bone)}
+.c-list{margin:0;padding:0;list-style:none;counter-reset:c}
+.c-list li{position:relative;padding:9px 12px 9px 48px;margin-bottom:6px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+ol.c-list li::before{content:attr(data-no);position:absolute;left:12px;top:8px;width:26px;height:26px;border-radius:50%;background:var(--signal);color:#1a0d05;font-family:'Kanit';font-weight:600;text-align:center;line-height:26px;font-size:.9rem}
+ul.c-list li::before{content:"";position:absolute;left:20px;top:19px;width:8px;height:8px;border-radius:50%;background:var(--teal)}
+
+/* ฟอร์มด่านกายภาพ: ช่อง ทำได้ + เต็ม */
+.irow.irow4{grid-template-columns:1fr 92px 92px 64px}
+@media (max-width:900px){.irow.irow4{grid-template-columns:1fr 78px 78px 52px}}
