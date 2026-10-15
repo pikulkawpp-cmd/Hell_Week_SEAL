@@ -11,6 +11,7 @@
       <button data-view="record">บันทึกผลการฝึก</button>
       <button data-view="exams">คำขอสอบ <span class="count" id="examBadge" hidden>0</span></button>
       <button data-view="trainees">รายชื่อผู้เข้ารับการฝึก</button>
+      <button data-view="depts" id="navDepts" hidden>กองต่าง ๆ</button>
       <button data-view="settings">ตั้งค่า</button>
     </nav>
     <span class="mode" id="modeBadge"></span>
@@ -173,6 +174,25 @@
           <tbody id="recordBody"></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- ===== กองต่าง ๆ (เฉพาะแอดมิน) ===== -->
+    <section class="view" id="v-depts" hidden>
+      <header class="page-head">
+        <div><h2>กองต่าง ๆ</h2><p>แอดมินดูเนื้อหาและการเข้าเวรของทุกกองได้</p></div>
+        <select id="adSel" aria-label="เลือกกอง">
+          <option value="office">กองธุรการ</option>
+          <option value="special">กองรบพิเศษ</option>
+          <option value="support">กองสนับสนุน</option>
+        </select>
+      </header>
+      <div class="tabs" id="adTabs">
+        <button data-at="course" class="active">หลักสูตรเข้ากอง</button>
+        <button data-at="rules">กฎการทำงาน</button>
+        <button data-at="library">หน้าที่และคลังความรู้</button>
+        <button data-at="duty">การเข้าเวร</button>
+      </div>
+      <div id="adBody"></div>
     </section>
 
     <!-- ===== ตั้งค่า ===== -->

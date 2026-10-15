@@ -1,0 +1,39 @@
+<!-- หน้าสมาชิกกอง: ส่งให้เฉพาะสมาชิกกองที่ล็อกอินแล้ว (ผ่าน /api/dept/ui) -->
+<div id="dapp" class="app">
+  <aside class="side">
+    <div class="side-brand">
+      <span class="mark">⚓</span>
+      <div><b id="dName">กอง</b><small>สมาชิก: <span id="dMember"></span></small></div>
+    </div>
+    <nav id="dnav">
+      <button data-dv="course" class="active">หลักสูตรเข้าแผนก</button>
+      <button data-dv="rules">กฎการทำงาน</button>
+      <button data-dv="duty">กดเข้า-ออกเวร</button>
+      <button data-dv="library">คลังความรู้และหน้าที่</button>
+    </nav>
+    <span class="mode server" id="dRole">สมาชิกกอง</span>
+    <button class="btn small logout" id="dLogout">ออกจากระบบ</button>
+  </aside>
+
+  <main class="content">
+    <section class="dview" id="dv-course"></section>
+
+    <section class="dview" id="dv-rules" hidden></section>
+
+    <section class="dview" id="dv-duty" hidden>
+      <header class="page-head"><div><h2>กดเข้า-ออกเวร</h2><p>กดเริ่มเมื่อเข้าปฏิบัติหน้าที่ และกดเลิกเมื่อออกจากเวร ระบบบันทึกเวลาให้</p></div></header>
+      <div class="duty-card" id="dutyCard"></div>
+      <h3>กำลังปฏิบัติหน้าที่ตอนนี้</h3>
+      <div id="dutyOn"></div>
+      <h3>ประวัติล่าสุดของกอง</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ชื่อ</th><th>เริ่ม</th><th>เลิก</th><th>ระยะเวลา</th></tr></thead>
+          <tbody id="dutyBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="dview" id="dv-library" hidden></section>
+  </main>
+</div>

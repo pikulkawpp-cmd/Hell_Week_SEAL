@@ -19,7 +19,7 @@
     <h1>HELL WEEK</h1>
     <div class="lock-tabs" id="lockTabs">
       <button type="button" data-lt="student" class="active">นักเรียนเข้าสอบ</button>
-      <button type="button" data-lt="staff">ครูฝึก / แอดมิน</button>
+      <button type="button" data-lt="staff">เข้าสู่ระบบกอง</button>
     </div>
 
     <form id="studentForm" autocomplete="off">
@@ -34,7 +34,18 @@
     </form>
 
     <form id="lockForm" autocomplete="off" hidden>
-      <p>เฉพาะครูฝึกและแอดมินเท่านั้น</p>
+      <label>เลือกกอง
+        <select id="divSel">
+          <option value="admin">แอดมิน</option>
+          <option value="training">กองฝึก (ครูฝึก)</option>
+          <option value="office">กองธุรการ</option>
+          <option value="special">กองรบพิเศษ</option>
+          <option value="support">กองสนับสนุน</option>
+        </select>
+      </label>
+      <label id="divNameWrap" hidden>ชื่อสมาชิก
+        <input id="divName" type="text" maxlength="40" autocomplete="off">
+      </label>
       <label>รหัสผ่าน
         <input id="lockPass" type="password" required>
       </label>

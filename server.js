@@ -5,6 +5,10 @@
    รหัสผ่าน
      HW_PASSWORD        รหัสครูฝึก (ค่าเริ่มต้น 0104) ดู/บันทึก/แก้ไข/อนุญาตสอบได้ แต่ลบไม่ได้
      HW_ADMIN_PASSWORD  รหัสแอดมิน (ต้องตั้ง และต้องไม่ซ้ำรหัสครูฝึก) ลบข้อมูลได้เฉพาะแอดมิน
+   กองต่าง ๆ (ล็อกอินแยกแผนก ชื่อ + รหัสของกอง) ตั้งรหัสที่อยากเปิดใช้เท่านั้น ไม่ตั้ง = กองนั้นยังเข้าไม่ได้
+     HW_PASS_OFFICE   กองธุรการ      HW_PASS_SPECIAL  กองรบพิเศษ      HW_PASS_SUPPORT  กองสนับสนุน
+     สมาชิกกองเห็นเฉพาะหลักสูตรเข้ากอง / กดการทำงาน / คลังความรู้และหน้าที่ของกองตัวเอง
+     แอดมินดูได้ทุกกอง ครูฝึก (กองฝึก) เห็นเหมือนเดิมและดูข้อมูลกองอื่นไม่ได้
    ระบบสอบออนไลน์
      นักเรียนเข้าด้วยชื่อ+อีเมล → ขอสอบ → ครูฝึกอนุญาต → สอบ → บันทึกคะแนนวิชาการอัตโนมัติ
      EXAM_MINUTES       เวลาสอบเป็นนาที (ค่าเริ่มต้น 45)
@@ -20,6 +24,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const COURSE = require('./course-data.js');
+const DEPT_DATA = require('./dept-data.js');
 
 const PORT = process.env.PORT || 3000;
 const PASSWORD = process.env.HW_PASSWORD || '0104';
@@ -27,15 +32,25 @@ const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const EXAM_FILE = path.join(DATA_DIR, 'exam-state.json');
+const DUTY_FILE = path.join(DATA_DIR, 'duty-log.json');
 const SHEETS_URL = process.env.SHEETS_URL || '';
 const SHEETS_KEY = process.env.SHEETS_KEY || '';
 const EXAM_MINUTES = Number(process.env.EXAM_MINUTES) || 45;
 const GRACE_MS = 60 * 1000;
 const MAX_BODY = 30 * 1024 * 1024;
 
-if (ADMIN_PASSWORD && ADMIN_PASSWORD === PASSWORD) {
-  console.error('ผิดพลาด: HW_ADMIN_PASSWORD ต้องไม่ซ้ำกับ HW_PASSWORD (ไม่งั้นครูทุกคนจะกลายเป็นแอดมิน)');
-  process.exit(1);
+const DEPTS = {
+  office:  { name: 'กองธุรการ',   pass: process.env.HW_PASS_OFFICE  || '' },
+  special: { name: 'กองรบพิเศษ',  pass: process.env.HW_PASS_SPECIAL || '' },
+  support: { name: 'กองสนับสนุน', pass: process.env.HW_PASS_SUPPORT || '' }
+};
+{
+  const all = [['HW_PASSWORD', PASSWORD], ['HW_ADMIN_PASSWORD', ADMIN_PASSWORD], ...Object.entries(DEPTS).map(([k, d]) => ['HW_PASS_' + k.toUpperCase(), d.pass])].filter(x => x[1]);
+  const seen = new Map();
+  for (const [k, v] of all) {
+    if (seen.has(v)) { console.error(`ผิดพลาด: ${k} ซ้ำกับ ${seen.get(v)} (รหัสผ่านของแต่ละกองและแอดมินต้องไม่ซ้ำกัน ไม่งั้นสิทธิ์จะปนกัน)`); process.exit(1); }
+    seen.set(v, k);
+  }
 }
 
 const hmac = (key, text) => crypto.createHmac('sha256', key).update(text).digest('hex');
@@ -66,11 +81,25 @@ function parseStudent(h) {
     return { role: 'student', name: d.n, email: d.e };
   } catch { return null; }
 }
+function makeDeptToken(dept, name) {   // เซ็นแยกโดเมนจากโทเคนนักเรียน เอาไปใช้ข้ามกันไม่ได้
+  const p = Buffer.from(JSON.stringify({ d: dept, n: name, t: Date.now() + 12 * 3600 * 1000 })).toString('base64url');
+  return 'd.' + p + '.' + hmac(SIGN_KEY, 'd.' + p);
+}
+function parseDept(h) {
+  const [pre, p, sig] = h.split('.');
+  if (pre !== 'd' || !p || !sig || !safeEq(sig, hmac(SIGN_KEY, 'd.' + p))) return null;
+  try {
+    const d = JSON.parse(Buffer.from(p, 'base64url').toString('utf8'));
+    if (Date.now() > d.t || !DEPTS[d.d] || !DEPTS[d.d].pass) return null;
+    return { role: 'dept', dept: d.d, name: d.n };
+  } catch { return null; }
+}
 function authed(req) {   // คืนค่า { role: 'admin' | 'user' | 'student', ... } หรือ null
   const h = (req.headers.authorization || '').replace('Bearer ', '');
   if (ADMIN_TOKEN && safeEq(h, ADMIN_TOKEN)) return { role: 'admin' };
   if (safeEq(h, TOKEN)) return { role: 'user' };
   if (h.startsWith('s.')) return parseStudent(h);
+  if (h.startsWith('d.')) return parseDept(h);
   return null;
 }
 
@@ -205,6 +234,73 @@ async function saveExamResult(r) {
   await upsertRecords([rec]);
 }
 
+/* ---------- กดการทำงาน (บันทึกเวลาปฏิบัติหน้าที่ของแต่ละกอง) ---------- */
+let duty = [];
+try { duty = JSON.parse(fs.readFileSync(DUTY_FILE, 'utf8')); if (!Array.isArray(duty)) duty = []; } catch { duty = []; }
+let dutySheetOk = !!SHEETS_URL, lastDutyPull = 0;
+const persistDuty = () => { try { writeJSON(DUTY_FILE, duty); } catch {} };
+const sameName = (a, b) => norm(a).toLowerCase() === norm(b).toLowerCase();
+
+async function dutyRefresh(force) {   // Google Sheet เป็นหลัก (ถ้าเชื่อมไว้และ Apps Script รองรับ)
+  if (!SHEETS_URL || !dutySheetOk || (!force && Date.now() - lastDutyPull < 8000)) return;
+  let j;
+  try {
+    const res = await fetch(SHEETS_URL + (SHEETS_URL.includes('?') ? '&' : '?') + 'action=duty&key=' + encodeURIComponent(SHEETS_KEY), { redirect: 'follow' });
+    j = await res.json();
+  } catch (e) { throw sheetErr(e); }
+  if (!j.ok) throw sheetErr(new Error(j.error || 'sheet error'));
+  if (!Array.isArray(j.entries)) { dutySheetOk = false; console.log('  Apps Script ยังเป็นเวอร์ชันเก่า ไม่รองรับบันทึกการปฏิบัติงาน จึงเก็บไว้ที่เซิร์ฟเวอร์เท่านั้น'); return; }
+  duty = j.entries; lastDutyPull = Date.now(); persistDuty();
+}
+async function dutySave(entry) {
+  if (SHEETS_URL && dutySheetOk) {
+    try { await sheetCall({ action: 'duty_save', entries: [entry] }); }
+    catch (e) {
+      if (e.message === 'unknown action') { dutySheetOk = false; console.log('  Apps Script ยังเป็นเวอร์ชันเก่า ไม่รองรับบันทึกการปฏิบัติงาน จึงเก็บไว้ที่เซิร์ฟเวอร์เท่านั้น'); }
+      else throw e;
+    }
+  }
+  const i = duty.findIndex(x => x.id === entry.id);
+  if (i >= 0) duty[i] = entry; else duty.push(entry);
+  persistDuty();
+}
+const openDuty = (dept, name) => duty.find(x => x.dept === dept && !x.end && sameName(x.name, name));
+
+// เส้นทางของกอง: สมาชิกกองใช้ได้เฉพาะกองตัวเอง แอดมินระบุกองเองได้ (?dept= หรือใน body)
+async function deptRoutes(req, res, p, url, who) {
+  const admin = who.role === 'admin';
+  const body = req.method === 'POST' ? await readBody(req) : {};
+  const deptId = admin ? (url.searchParams.get('dept') || body.dept || '') : who.dept;
+  if (p === '/api/dept/ui' && req.method === 'GET' && !admin) { send(res, 200, fs.readFileSync(path.join(__dirname, 'dept.html')), 'text/html; charset=utf-8'); return true; }
+  if (!DEPT_DATA[deptId]) { send(res, 400, { error: 'invalid dept' }); return true; }
+
+  if (p === '/api/dept/content' && req.method === 'GET') { send(res, 200, DEPT_DATA[deptId]); return true; }
+
+  if (p === '/api/dept/duty' && req.method === 'GET') {
+    try { await dutyRefresh(false); } catch {}
+    const mine = admin ? null : openDuty(deptId, who.name) || null;
+    const inDept = duty.filter(x => x.dept === deptId);
+    send(res, 200, { dept: deptId, now: Date.now(), me: mine, onDuty: inDept.filter(x => !x.end), entries: [...inDept].sort((a, b) => b.start - a.start).slice(0, 100) });
+    return true;
+  }
+
+  if (p === '/api/dept/duty/start' && req.method === 'POST' && !admin) {
+    try { await dutyRefresh(false); } catch {}
+    if (openDuty(deptId, who.name)) { send(res, 409, { error: 'already on duty' }); return true; }
+    await dutySave({ id: Date.now() + '-' + crypto.randomInt(1000, 9999), dept: deptId, name: norm(who.name), start: Date.now(), end: null });
+    send(res, 200, { ok: true }); return true;
+  }
+
+  if (p === '/api/dept/duty/stop' && req.method === 'POST') {
+    try { await dutyRefresh(false); } catch {}
+    const e = openDuty(deptId, admin ? body.name : who.name);   // แอดมินบังคับเลิกเวรให้คนอื่นได้
+    if (!e) { send(res, 409, { error: 'not on duty' }); return true; }
+    await dutySave({ ...e, end: Date.now() });
+    send(res, 200, { ok: true }); return true;
+  }
+  return false;
+}
+
 /* ---------- ตัวช่วย HTTP ---------- */
 const fails = new Map();
 function send(res, code, body, type = 'application/json; charset=utf-8') {
@@ -240,6 +336,28 @@ http.createServer(async (req, res) => {
       const { password } = await readBody(req);
       if (ADMIN_PASSWORD && safeEq(password, ADMIN_PASSWORD)) { fails.delete(ip); return send(res, 200, { token: ADMIN_TOKEN, role: 'admin' }); }
       if (safeEq(password, PASSWORD)) { fails.delete(ip); return send(res, 200, { token: TOKEN, role: 'user' }); }
+      f.n++;
+      if (f.n >= 5) { f.until = Date.now() + 60000; f.n = 0; }
+      fails.set(ip, f);
+      return send(res, 401, { error: 'wrong' });
+    }
+
+    /* ล็อกอินสมาชิกกอง (กองธุรการ / กองรบพิเศษ / กองสนับสนุน) ด้วยชื่อ + รหัสของกอง แอดมินใช้รหัสแอดมินได้ทุกกอง */
+    if (p === '/api/dept/login' && req.method === 'POST') {
+      const ip = req.socket.remoteAddress;
+      const f = fails.get(ip) || { n: 0, until: 0 };
+      if (Date.now() < f.until) return send(res, 429, { error: 'blocked' });
+      const b = await readBody(req);
+      if (ADMIN_PASSWORD && safeEq(b.password, ADMIN_PASSWORD)) { fails.delete(ip); return send(res, 200, { token: ADMIN_TOKEN, role: 'admin' }); }
+      const d = DEPTS[b.dept];
+      if (!d) return send(res, 400, { error: 'invalid dept' });
+      if (!d.pass) return send(res, 403, { error: 'not configured' });
+      if (safeEq(b.password, d.pass)) {
+        const name = norm(b.name);
+        if (name.length < 2 || name.length > 40 || /[<>]/.test(name)) return send(res, 400, { error: 'invalid name' });
+        fails.delete(ip);
+        return send(res, 200, { token: makeDeptToken(b.dept, name), role: 'dept', dept: b.dept, deptName: d.name, name });
+      }
       f.n++;
       if (f.n >= 5) { f.until = Date.now() + 60000; f.n = 0; }
       fails.set(ip, f);
@@ -305,7 +423,17 @@ http.createServer(async (req, res) => {
         return send(res, 403, { error: 'forbidden' });
       }
 
+      /* ===== สมาชิกกอง: ใช้ได้เฉพาะเส้นทางของกองตัวเองเท่านั้น ===== */
+      if (role === 'dept') {
+        if (p.startsWith('/api/dept/') && await deptRoutes(req, res, p, url, who)) return;
+        return send(res, 403, { error: 'forbidden' });
+      }
+
       /* ===== ครูฝึก / แอดมิน ===== */
+      if (p.startsWith('/api/dept/')) {   // ข้อมูลกองต่าง ๆ ดูได้เฉพาะแอดมิน (ครูฝึกเห็นเหมือนเดิม ไม่เห็นกองอื่น)
+        if (role !== 'admin') return send(res, 403, { error: 'admin only' });
+        if (await deptRoutes(req, res, p, url, who)) return;
+      }
       if (p === '/api/ui' && req.method === 'GET') return send(res, 200, fs.readFileSync(path.join(__dirname, 'staff.html')), 'text/html; charset=utf-8');
       if (p === '/api/course' && req.method === 'GET') return send(res, 200, COURSE);
 
@@ -358,7 +486,8 @@ http.createServer(async (req, res) => {
     .forEach(i => console.log(`  เครื่องอื่นในเน็ตเดียวกัน: http://${i.address}:${PORT}`));
   console.log(`  ไฟล์ข้อมูล:         ${DATA_FILE}`);
   console.log(ADMIN_PASSWORD ? '  แอดมิน: ตั้งรหัสแอดมินแล้ว (ลบข้อมูลได้เฉพาะแอดมิน)' : '  คำเตือน: ยังไม่ได้ตั้ง HW_ADMIN_PASSWORD จึงไม่มีใครลบข้อมูลได้');
+  console.log('  กองต่าง ๆ: ' + Object.values(DEPTS).map(d => d.name + (d.pass ? ' (เปิด)' : ' (ยังไม่ได้ตั้งรหัส)')).join(' | '));
   console.log(`  ห้องสอบนักเรียน: เวลาสอบ ${EXAM_MINUTES} นาที ข้อสอบ ${COURSE.EXAM.length} ข้อ`);
   console.log(SHEETS_URL ? '  โหมด: เชื่อม Google Sheet' : '  โหมด: เก็บในไฟล์ data.json (ยังไม่ได้ตั้ง SHEETS_URL)');
-  initSheets().then(() => console.log(''));
+  initSheets().then(() => dutyRefresh(true).catch(() => {})).then(() => console.log(''));
 });

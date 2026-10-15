@@ -133,19 +133,30 @@ async function onLogin(e) {
   if (Date.now() < lockedUntil) { $('#lockErr').textContent = `ลองผิดหลายครั้ง รออีก ${Math.ceil((lockedUntil - Date.now()) / 1000)} วินาที`; return; }
 
   let res = null;
-  try { res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: pass }) }); } catch {}
+  const division = $('#divSel').value;   // แอดมินและครูฝึกตรวจรหัสผ่านผ่าน endpoint กลาง
+  const isCentralLogin = division === 'training' || division === 'admin';
+  const url = isCentralLogin ? '/api/login' : '/api/dept/login';
+  const payload = isCentralLogin ? { password: pass } : { password: pass, dept: division, name: $('#divName').value.trim() };
+  try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
 
   if (res && res.ok) {
     const d = await res.json();
-    TOKEN = d.token; ROLE = d.role === 'admin' ? 'admin' : 'user';
+    TOKEN = d.token; ROLE = d.role === 'admin' ? 'admin' : d.role === 'dept' ? 'dept' : 'user';
     sessionStorage.setItem(TOKEN_KEY, TOKEN);
     sessionStorage.setItem(ROLE_KEY, ROLE);
+    if (ROLE === 'dept') {   // สมาชิกกอง: ไม่โหลดข้อมูลครูฝึก
+      sessionStorage.setItem('hellweek_sname', d.name);
+      try { await enterDept(); } catch { $('#lockErr').textContent = 'โหลดหน้าของกองไม่สำเร็จ ลองใหม่อีกครั้ง'; }
+      return;
+    }
     MODE = 'server';
     try { await loadCourse(); await pull(); } catch { $('#lockErr').textContent = 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ'; return; }
     return enterApp();
   }
   if (res && res.status === 401) return showWrong();
   if (res && res.status === 429) { $('#lockErr').textContent = 'ลองผิดหลายครั้ง รอ 1 นาทีแล้วลองใหม่'; return; }
+  if (res && res.status === 403) { $('#lockErr').textContent = 'กองนี้ยังไม่เปิดใช้งาน (ยังไม่ได้ตั้งรหัสผ่านของกอง)'; return; }
+  if (res && res.status === 400) { $('#lockErr').textContent = 'กรอกชื่อสมาชิก 2–40 ตัวอักษร'; return; }
   $('#lockErr').textContent = 'ไม่พบเซิร์ฟเวอร์ ต้องเปิดผ่านลิงก์ของเว็บหรือรัน node server.js เท่านั้น';
 }
 
@@ -164,6 +175,7 @@ async function enterApp() {
   $('#roleBadge').className = 'role ' + ROLE;
   $('#wipeBtn').hidden = !isAdmin();
   $('#wipeNote').hidden = isAdmin();
+  $('#navDepts').hidden = !isAdmin();   // แอดมินเห็นทุกกอง
   $('#modeBadge').className = 'mode ' + MODE;
   $('#modeBadge').textContent = MODE === 'server' ? 'ข้อมูลร่วมทุกเครื่อง' : 'เก็บเฉพาะเครื่องนี้';
   $('#modeInfo').textContent = MODE === 'server'
@@ -185,6 +197,7 @@ async function resume() {
   if (sessionStorage.getItem(SESSION_KEY) !== '1' || !TOKEN) return;
   try {
     if (ROLE === 'student') return enterStudent(sessionStorage.getItem('hellweek_sname') || '');
+    if (ROLE === 'dept') return enterDept();
     await loadCourse();
     await pull();
     await enterApp();
@@ -193,7 +206,7 @@ async function resume() {
 
 /* ---------- 4) หน้าต่าง ๆ ---------- */
 function show(view) {
-  if (!$('#v-' + view)) view = 'dashboard';
+  if (!$('#v-' + view) || (view === 'depts' && !isAdmin())) view = 'dashboard';
   $$('.view').forEach(v => v.hidden = v.id !== 'v-' + view);
   $$('#nav button').forEach(b => b.classList.toggle('active', b.dataset.view === view));
   if (location.hash.slice(1) !== view) history.replaceState(null, '', '#' + view);
@@ -201,6 +214,7 @@ function show(view) {
   if (view === 'trainees') renderRecords();
   if (view === 'settings') renderStorage();
   if (view === 'exams') loadExamRequests();
+  if (view === 'depts') loadAdminDept();
   window.scrollTo(0, 0);
 }
 
@@ -237,20 +251,22 @@ function stationCards() {
         <h4>${esc(x.name)}</h4><p>${esc(x.note)}</p></article>`).join('')}</div>
     <p class="note">วิธีให้คะแนน: ครูฝึกกรอกว่านักเรียนทำได้เท่าไร และกำหนดเต็มเท่าไร (ตั้งได้ตามช่วงบนการ์ด ถ้าไม่กรอกจะใช้ค่าสูงสุด) คะแนนของด่าน = ทำได้ ÷ เต็ม x คะแนนด่าน เช่น เต็ม 500 ทำได้ 250 = ครึ่งหนึ่งของ 5 คะแนน</p></section>`;
 }
+function courseHTML(c, extra = '') {   // สร้าง HTML ของหลักสูตร/หัวข้อ (ใช้ทั้งคู่มือหลักสูตรและหน้าของกอง)
+  const tag = x => x.ordered ? 'ol' : 'ul';
+  return `<h3 class="c-title">${esc(c.title)}</h3>` +
+    (c.subtitle ? `<p class="sub">${esc(c.subtitle)}</p>` : '') +
+    (c.intro ? `<div class="why">${esc(c.intro)}</div>` : '') +
+    extra +
+    c.sections.map(x => `<section class="c-sec"><h4>${esc(x.heading)}</h4>` +
+      (x.text ? `<p>${esc(x.text)}</p>` : '') +
+      (x.items ? `<${tag(x)} class="c-list">${x.items.map((i, n) => `<li data-no="${i && i.no ? i.no : n + 1}">${esc(i && i.text ? i.text : i)}</li>`).join('')}</${tag(x)}>` : '') +
+      `</section>`).join('') +
+    (c.note ? `<p class="note">${esc(c.note)}</p>` : '');
+}
 function renderCourse() {
   COURSES.forEach(c => {
     const pane = $('#tab-' + c.id);
-    if (!pane) return;
-    const tag = x => x.ordered ? 'ol' : 'ul';
-    pane.innerHTML = `<h3 class="c-title">${esc(c.title)}</h3>` +
-      (c.subtitle ? `<p class="sub">${esc(c.subtitle)}</p>` : '') +
-      (c.intro ? `<div class="why">${esc(c.intro)}</div>` : '') +
-      (c.id === 'hellweek' ? stationCards() : '') +
-      c.sections.map(x => `<section class="c-sec"><h4>${esc(x.heading)}</h4>` +
-        (x.text ? `<p>${esc(x.text)}</p>` : '') +
-        (x.items ? `<${tag(x)} class="c-list">${x.items.map((i, n) => `<li data-no="${i && i.no ? i.no : n + 1}">${esc(i && i.text ? i.text : i)}</li>`).join('')}</${tag(x)}>` : '') +
-        `</section>`).join('') +
-      (c.note ? `<p class="note">${esc(c.note)}</p>` : '');
+    if (pane) pane.innerHTML = courseHTML(c, c.id === 'hellweek' ? stationCards() : '');
   });
 
   $('#subjectList').innerHTML = SUBJECTS.map(s => `
@@ -730,6 +746,8 @@ function initApp() {
   $('#wipeBtn').addEventListener('click', wipe);
   $('#examRefresh').addEventListener('click', loadExamRequests);
   $('#examBody').addEventListener('click', onExamClick);
+  $('#adSel').addEventListener('change', loadAdminDept);
+  $('#adTabs').addEventListener('click', e => { if (e.target.dataset.at) { adTab = e.target.dataset.at; renderAdminDept(); } });
   window.addEventListener('hashchange', () => { if (!document.body.classList.contains('locked')) show(location.hash.slice(1)); });
 }
 
@@ -904,7 +922,80 @@ async function submitExam(auto) {
   } finally { sBusy = false; }
 }
 
-/* ---------- 10) เริ่มทำงาน ---------- */
+/* ---------- 10) กองธุรการ / กองรบพิเศษ / กองสนับสนุน ---------- */
+const hasSec = o => !!(o && o.sections && o.sections.length);
+const draftBar = d => d.draft ? '<p class="note">เนื้อหาของกองนี้ยังเป็นตัวอย่างเริ่มต้น ยังไม่ได้ใส่เนื้อหาจริง</p>' : '';
+function deptParts(d) {   // แยกเนื้อหากองเป็น 3 หน้า: หลักสูตรเข้ากอง / กฎการทำงาน / หน้าที่และคลังความรู้
+  const none = t => `<p class="sub">ยังไม่มี${t}</p>`;
+  return {
+    course: hasSec(d.entry) ? courseHTML(d.entry) : none('หลักสูตรเข้ากอง'),
+    rules: hasSec(d.rules) ? courseHTML({ title: 'กฎการทำงาน', ...d.rules }) : none('กฎการทำงาน'),
+    library: (hasSec(d.duties) ? courseHTML({ title: 'หน้าที่', ...d.duties }) : none('หน้าที่')) +
+             (hasSec(d.library) ? courseHTML({ title: 'คลังความรู้', ...d.library }) : none('คลังความรู้'))
+  };
+}
+const fmtDur = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที'; };
+const dutyOnHTML = d => d.onDuty.length ? d.onDuty.map(e => `<span class="tag go">${esc(e.name)} · ${fmtDur(d.now - e.start)}</span>`).join(' ') : '<p class="sub">ไม่มีใครเข้าเวรตอนนี้</p>';
+const dutyRowsHTML = d => d.entries.length ? d.entries.map(e => `<tr><td>${esc(e.name)}</td><td>${fmtTime(e.start)}</td><td>${e.end ? fmtTime(e.end) : '-'}</td><td>${fmtDur((e.end || d.now) - e.start)}</td></tr>`).join('') : '<tr><td class="empty" colspan="4">ยังไม่มีประวัติ</td></tr>';
+
+let dutyTimer = null;
+async function enterDept() {   // สมาชิกกอง: โหลดหน้าและเนื้อหาของกองตัวเองเท่านั้น
+  sessionStorage.setItem(SESSION_KEY, '1');
+  if (!$('#dapp')) {
+    const r = await fetch('/api/dept/ui', { headers: { Authorization: 'Bearer ' + TOKEN } });
+    if (!r.ok) throw new Error('ui');
+    $('#appHost').innerHTML = await r.text();
+  }
+  const d = await api('/dept/content');
+  const p = deptParts(d);
+  document.body.classList.remove('locked');
+  $('#dName').textContent = d.name;
+  $('#dMember').textContent = sessionStorage.getItem('hellweek_sname') || '';
+  $('#dv-course').innerHTML = draftBar(d) + p.course;
+  $('#dv-rules').innerHTML = p.rules;
+  $('#dv-library').innerHTML = p.library;
+  $$('#dnav button').forEach(b => b.onclick = () => {
+    $$('#dnav button').forEach(x => x.classList.toggle('active', x === b));
+    $$('.dview').forEach(v => v.hidden = v.id !== 'dv-' + b.dataset.dv);
+    clearInterval(dutyTimer);
+    if (b.dataset.dv === 'duty') { refreshDuty(); dutyTimer = setInterval(refreshDuty, 20000); }
+  });
+  $('#dLogout').onclick = logout;
+}
+async function refreshDuty() {
+  try {
+    const d = await api('/dept/duty'), me = d.me;
+    $('#dutyCard').innerHTML = me
+      ? `<p>คุณกำลังปฏิบัติหน้าที่ ตั้งแต่ ${fmtTime(me.start)} (${fmtDur(d.now - me.start)})</p><button class="btn primary" id="dutyBtn">เลิกเวร</button>`
+      : `<p>ยังไม่ได้เข้าเวร</p><button class="btn primary" id="dutyBtn">เริ่มปฏิบัติหน้าที่</button>`;
+    $('#dutyBtn').onclick = async () => {
+      try { await api('/dept/duty/' + (me ? 'stop' : 'start'), { method: 'POST' }); } catch { toast('ทำรายการไม่สำเร็จ'); }
+      refreshDuty();
+    };
+    $('#dutyOn').innerHTML = dutyOnHTML(d);
+    $('#dutyBody').innerHTML = dutyRowsHTML(d);
+  } catch {}
+}
+
+let adTab = 'course', AD = null;
+async function loadAdminDept() {   // แอดมิน: ดูเนื้อหาและการเข้าเวรของกองที่เลือก
+  if (!isAdmin()) return;
+  const id = $('#adSel').value;
+  try {
+    const [c, du] = await Promise.all([api('/dept/content?dept=' + id), api('/dept/duty?dept=' + id)]);
+    AD = { parts: deptParts(c), draft: draftBar(c), duty: du };
+    renderAdminDept();
+  } catch { toast('โหลดข้อมูลกองไม่สำเร็จ'); }
+}
+function renderAdminDept() {
+  if (!AD) return;
+  $$('#adTabs button').forEach(b => b.classList.toggle('active', b.dataset.at === adTab));
+  $('#adBody').innerHTML = adTab === 'duty'
+    ? `<h3>กำลังปฏิบัติหน้าที่ตอนนี้</h3>${dutyOnHTML(AD.duty)}<h3>ประวัติล่าสุด</h3><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>เริ่ม</th><th>เลิก</th><th>ระยะเวลา</th></tr></thead><tbody>${dutyRowsHTML(AD.duty)}</tbody></table></div>`
+    : AD.draft + AD.parts[adTab];
+}
+
+/* ---------- 11) เริ่มทำงาน ---------- */
 $$('#lockTabs button').forEach(b => b.addEventListener('click', () => {
   $$('#lockTabs button').forEach(x => x.classList.toggle('active', x === b));
   $('#studentForm').hidden = b.dataset.lt !== 'student';
@@ -913,5 +1004,6 @@ $$('#lockTabs button').forEach(b => b.addEventListener('click', () => {
 }));
 $('#lockForm').addEventListener('submit', onLogin);
 $('#studentForm').addEventListener('submit', onStudentLogin);
+$('#divSel').addEventListener('change', () => { $('#divNameWrap').hidden = ['training', 'admin'].includes($('#divSel').value); });
 $('#sLogout').addEventListener('click', logout);
 resume();
