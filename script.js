@@ -962,14 +962,26 @@ async function enterDept() {   // สมาชิกกอง: โหลดห�
   });
   $('#dLogout').onclick = logout;
 }
+async function captureDutyPhoto() {
+  const input = document.getElementById('dutyPhotoInput');
+  const file = input?.files?.[0];
+  if (!file) { toast('กรุณาแนบภาพหลักฐานก่อนทำรายการ'); return null; }
+  try { return await compress(file, 1200, 0.78); } catch { toast('อ่านภาพไม่สำเร็จ'); return null; }
+}
 async function refreshDuty() {
   try {
     const d = await api('/dept/duty'), me = d.me;
     $('#dutyCard').innerHTML = me
-      ? `<p>คุณกำลังปฏิบัติหน้าที่ ตั้งแต่ ${fmtTime(me.start)} (${fmtDur(d.now - me.start)})</p><button class="btn primary" id="dutyBtn">เลิกเวร</button>`
-      : `<p>ยังไม่ได้เข้าเวร</p><button class="btn primary" id="dutyBtn">เริ่มปฏิบัติหน้าที่</button>`;
+      ? `<p>คุณกำลังปฏิบัติหน้าที่ ตั้งแต่ ${fmtTime(me.start)} (${fmtDur(d.now - me.start)})</p>`
+      : `<p>ยังไม่ได้เข้าเวร</p>`;
+    $('#dutyCard').innerHTML += `<label class="duty-photo-label">ภาพหลักฐาน ${me ? 'ก่อนเลิกเวร' : 'ก่อนเข้าเวร'}<input id="dutyPhotoInput" type="file" accept="image/*" capture="environment" required></label><p class="sub">แนบภาพหน้าจอ Roblox เพื่อส่งรายงานเข้า Discord</p><button class="btn primary" id="dutyBtn">${me ? 'เลิกเวรและส่งรายงาน' : 'เริ่มเวรและส่งรายงาน'}</button>`;
     $('#dutyBtn').onclick = async () => {
-      try { await api('/dept/duty/' + (me ? 'stop' : 'start'), { method: 'POST' }); } catch { toast('ทำรายการไม่สำเร็จ'); }
+      const photo = await captureDutyPhoto(); if (!photo) return;
+      $('#dutyBtn').disabled = true;
+      try {
+        const result = await api('/dept/duty/' + (me ? 'stop' : 'start'), { method: 'POST', body: JSON.stringify({ photo }) });
+        toast(result.discord === 'sent' ? 'บันทึกเวรและส่งรายงานเข้า Discord แล้ว' : result.discord === 'not_configured' ? 'บันทึกเวรแล้ว แต่ยังไม่ได้ตั้ง DISCORD_WEBHOOK_URL' : 'บันทึกเวรแล้ว แต่ส่ง Discord ไม่สำเร็จ');
+      } catch (e) { toast(e.message === '400' ? 'กรุณาแนบภาพที่รองรับ ขนาดไม่เกิน 5 MB' : 'ทำรายการไม่สำเร็จ'); }
       refreshDuty();
     };
     $('#dutyOn').innerHTML = dutyOnHTML(d);
