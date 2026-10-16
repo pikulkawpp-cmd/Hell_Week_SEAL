@@ -934,11 +934,7 @@ function deptParts(d) {   // แยกเนื้อหากองเป็น
              (hasSec(d.library) ? courseHTML({ title: 'คลังความรู้', ...d.library }) : none('คลังความรู้'))
   };
 }
-const fmtDur = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m >= 60 ? Math.floor(m / 60) + ' ชม. ' + (m % 60) + ' นาที' : m + ' นาที'; };
-const dutyOnHTML = d => d.onDuty.length ? d.onDuty.map(e => `<span class="tag go">${esc(e.name)} · ${fmtDur(d.now - e.start)}</span>`).join(' ') : '<p class="sub">ไม่มีใครเข้าเวรตอนนี้</p>';
-const dutyRowsHTML = d => d.entries.length ? d.entries.map(e => `<tr><td>${esc(e.name)}</td><td>${fmtTime(e.start)}</td><td>${e.end ? fmtTime(e.end) : '-'}</td><td>${fmtDur((e.end || d.now) - e.start)}</td></tr>`).join('') : '<tr><td class="empty" colspan="4">ยังไม่มีประวัติ</td></tr>';
 
-let dutyTimer = null;
 async function enterDept() {   // สมาชิกกอง: โหลดหน้าและเนื้อหาของกองตัวเองเท่านั้น
   sessionStorage.setItem(SESSION_KEY, '1');
   if (!$('#dapp')) {
@@ -954,57 +950,131 @@ async function enterDept() {   // สมาชิกกอง: โหลดห�
   $('#dv-course').innerHTML = draftBar(d) + p.course;
   $('#dv-rules').innerHTML = p.rules;
   $('#dv-library').innerHTML = p.library;
+  const isSeal = d.id === 'seal';
+  if ($('#dDutyNav')) $('#dDutyNav').hidden = !isSeal;
+  if (isSeal) initDutyReport();
   $$('#dnav button').forEach(b => b.onclick = () => {
+    if (b.dataset.dv === 'duty' && !isSeal) return;
     $$('#dnav button').forEach(x => x.classList.toggle('active', x === b));
     $$('.dview').forEach(v => v.hidden = v.id !== 'dv-' + b.dataset.dv);
-    clearInterval(dutyTimer);
-    if (b.dataset.dv === 'duty') { refreshDuty(); dutyTimer = setInterval(refreshDuty, 20000); }
   });
   $('#dLogout').onclick = logout;
 }
-async function captureDutyPhoto() {
-  const input = document.getElementById('dutyPhotoInput');
-  const file = input?.files?.[0];
-  if (!file) { toast('กรุณาแนบภาพหลักฐานก่อนทำรายการ'); return null; }
-  try { return await compress(file, 1200, 0.78); } catch { toast('อ่านภาพไม่สำเร็จ'); return null; }
-}
-async function refreshDuty() {
-  try {
-    const d = await api('/dept/duty'), me = d.me;
-    $('#dutyCard').innerHTML = me
-      ? `<p>คุณกำลังปฏิบัติหน้าที่ ตั้งแต่ ${fmtTime(me.start)} (${fmtDur(d.now - me.start)})</p>`
-      : `<p>ยังไม่ได้เข้าเวร</p>`;
-    $('#dutyCard').innerHTML += `<label class="duty-photo-label">ภาพหลักฐาน ${me ? 'ก่อนเลิกเวร' : 'ก่อนเข้าเวร'}<input id="dutyPhotoInput" type="file" accept="image/*" capture="environment" required></label><p class="sub">แนบภาพหน้าจอ Roblox เพื่อส่งรายงานเข้า Discord</p><button class="btn primary" id="dutyBtn">${me ? 'เลิกเวรและส่งรายงาน' : 'เริ่มเวรและส่งรายงาน'}</button>`;
-    $('#dutyBtn').onclick = async () => {
-      const photo = await captureDutyPhoto(); if (!photo) return;
-      $('#dutyBtn').disabled = true;
-      try {
-        const result = await api('/dept/duty/' + (me ? 'stop' : 'start'), { method: 'POST', body: JSON.stringify({ photo }) });
-        toast(result.discord === 'sent' ? 'บันทึกเวรและส่งรายงานเข้า Discord แล้ว' : result.discord === 'not_configured' ? 'บันทึกเวรแล้ว แต่ยังไม่ได้ตั้ง DISCORD_WEBHOOK_URL' : 'บันทึกเวรแล้ว แต่ส่ง Discord ไม่สำเร็จ');
-      } catch (e) { toast(e.message === '400' ? 'กรุณาแนบภาพที่รองรับ ขนาดไม่เกิน 5 MB' : 'ทำรายการไม่สำเร็จ'); }
-      refreshDuty();
-    };
-    $('#dutyOn').innerHTML = dutyOnHTML(d);
-    $('#dutyBody').innerHTML = dutyRowsHTML(d);
-  } catch {}
-}
 
+/* ---------- ระบบเข้า–ออกเวร SEAL: สร้างภาพรายงานให้บันทึกลงเครื่อง ---------- */
+let dutyEvidenceData = '';
+let dutyReportData = '';
+let lastDutyAction = 'เข้าเวร';
+function dutyKey() {
+  const n = sessionStorage.getItem('hellweek_sname') || 'บุคลากร';
+  return 'hellweek_seal_shift_' + n.trim().toLowerCase();
+}
+function getDutyState() { return load(dutyKey(), null); }
+function setDutyState(value) { return save(dutyKey(), value); }
+function dutyDate(ms) {
+  return new Date(ms).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok', dateStyle: 'long', timeStyle: 'medium' });
+}
+function initDutyReport() {
+  const name = sessionStorage.getItem('hellweek_sname') || '';
+  $('#dutyName').value = name;
+  $('#dutyPhoto').value = '';
+  $('#dutyPreviewWrap').hidden = true;
+  $('#dutyDownloadBtn').hidden = true;
+  dutyEvidenceData = ''; dutyReportData = '';
+  const state = getDutyState();
+  $('#dutyStatus').textContent = state && state.start && !state.end ? 'สถานะ: กำลังเข้าเวรตั้งแต่ ' + dutyDate(state.start) : 'สถานะ: ยังไม่ได้เริ่มเวร';
+  $('#dutyStartBtn').disabled = !!(state && state.start && !state.end);
+  $('#dutyEndBtn').disabled = !(state && state.start && !state.end);
+  $('#dutyPhoto').onchange = async e => {
+    const file = e.target.files && e.target.files[0];
+    dutyEvidenceData = ''; dutyReportData = ''; $('#dutyDownloadBtn').hidden = true;
+    if (!file) { $('#dutyPreviewWrap').hidden = true; return; }
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type) || file.size > 8 * 1024 * 1024) {
+      toast('กรุณาใช้ภาพ PNG, JPG หรือ WebP ขนาดไม่เกิน 8 MB'); e.target.value = ''; $('#dutyPreviewWrap').hidden = true; return;
+    }
+    try {
+      dutyEvidenceData = await new Promise((resolve, reject) => {
+        const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file);
+      });
+      $('#dutyPreview').src = dutyEvidenceData; $('#dutyPreviewWrap').hidden = false;
+    } catch { toast('อ่านไฟล์ภาพไม่สำเร็จ'); }
+  };
+  $('#dutyStartBtn').onclick = () => confirmDutyAction('เข้าเวร');
+  $('#dutyEndBtn').onclick = () => confirmDutyAction('ออกเวร');
+  $('#dutyDownloadBtn').onclick = () => {
+    if (!dutyReportData) return;
+    const a = document.createElement('a');
+    a.href = dutyReportData;
+    a.download = `SEAL_${lastDutyAction}_${Date.now()}.png`;
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+}
+async function confirmDutyAction(action) {
+  if (!dutyEvidenceData) { toast('กรุณาเลือกภาพหลักฐานก่อน'); return; }
+  const state = getDutyState();
+  if (action === 'เข้าเวร' && state && state.start && !state.end) { toast('คุณกำลังเข้าเวรอยู่'); return; }
+  if (action === 'ออกเวร' && !(state && state.start && !state.end)) { toast('ยังไม่มีรายการเข้าเวรที่กำลังดำเนินอยู่'); return; }
+  const now = Date.now();
+  lastDutyAction = action;
+  const next = action === 'เข้าเวร' ? { name: sessionStorage.getItem('hellweek_sname') || '', start: now, end: null } : { ...state, end: now };
+  try {
+    dutyReportData = await makeDutyReport(action, next, dutyEvidenceData, now);
+    if (!setDutyState(next)) throw new Error('storage');
+    $('#dutyStatus').textContent = action === 'เข้าเวร'
+      ? 'ยืนยันเข้าเวรแล้ว เวลา ' + dutyDate(now) + ' — กดบันทึกภาพรายงานเพื่อนำไปโพสต์ใน Discord'
+      : 'ยืนยันออกเวรแล้ว เวลา ' + dutyDate(now) + ' — กดบันทึกภาพรายงานเพื่อนำไปโพสต์ใน Discord';
+    $('#dutyDownloadBtn').hidden = false;
+    $('#dutyStartBtn').disabled = action === 'เข้าเวร';
+    $('#dutyEndBtn').disabled = action !== 'เข้าเวร';
+    $('#dutyHelp').textContent = 'สร้างภาพรายงานสำเร็จแล้ว กด “บันทึกภาพรายงานลงเครื่อง” จากนั้นนำไฟล์ PNG ไปโพสต์ในห้อง Discord';
+    toast('ยืนยัน' + action + 'และสร้างภาพรายงานแล้ว');
+  } catch (e) {
+    toast('สร้างภาพรายงานไม่สำเร็จ กรุณาเลือกภาพใหม่แล้วลองอีกครั้ง');
+  }
+}
+async function makeDutyReport(action, state, photoData, now) {
+  const canvas = $('#dutyCanvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#071a2c'; ctx.fillRect(0, 0, 1200, 900);
+  ctx.fillStyle = '#d6ad5c'; ctx.fillRect(0, 0, 1200, 14);
+  ctx.fillStyle = '#ffffff'; ctx.font = 'bold 44px sans-serif'; ctx.fillText('HELL WEEK SEAL', 60, 78);
+  ctx.fillStyle = '#d6ad5c'; ctx.font = 'bold 34px sans-serif'; ctx.fillText(`รายงาน${action}บุคลากร`, 60, 132);
+  ctx.fillStyle = '#ffffff'; ctx.font = '28px sans-serif';
+  ctx.fillText('ชื่อ Roblox: ' + (state.name || 'ไม่ระบุ'), 60, 194);
+  ctx.fillText('เวลา' + action + ': ' + dutyDate(now), 60, 242);
+  if (state.start) ctx.fillText('เวลาเข้าเวร: ' + dutyDate(state.start), 60, 290);
+  if (action === 'ออกเวร' && state.end) {
+    const mins = Math.max(0, Math.floor((state.end - state.start) / 60000));
+    ctx.fillText(`ระยะเวลาเวร: ${Math.floor(mins / 60)} ชั่วโมง ${mins % 60} นาที`, 60, 338);
+  }
+  ctx.fillStyle = '#d6ad5c'; ctx.fillRect(60, 366, 1080, 3);
+  const img = await new Promise((resolve, reject) => {
+    const i = new Image(); i.onload = () => resolve(i); i.onerror = reject; i.src = photoData;
+  });
+  const maxW = 1080, maxH = 440;
+  const scale = Math.min(maxW / img.width, maxH / img.height);
+  const w = img.width * scale, h = img.height * scale;
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(60, 390, 1080, 450);
+  ctx.drawImage(img, 60 + (1080 - w) / 2, 390 + (450 - h) / 2, w, h);
+  ctx.fillStyle = '#b8c7d8'; ctx.font = '20px sans-serif';
+  ctx.fillText('ภาพหลักฐานแนบโดยบุคลากร • สร้างจากเว็บไซต์ Hell Week SEAL', 60, 875);
+  return canvas.toDataURL('image/png');
+}
 let adTab = 'course', AD = null;
-async function loadAdminDept() {   // แอดมิน: ดูเนื้อหาและการเข้าเวรของกองที่เลือก
+async function loadAdminDept() {   // แอดมิน: ดูเนื้อหาของกองที่เลือก
   if (!isAdmin()) return;
   const id = $('#adSel').value;
   try {
-    const [c, du] = await Promise.all([api('/dept/content?dept=' + id), api('/dept/duty?dept=' + id)]);
-    AD = { parts: deptParts(c), draft: draftBar(c), duty: du };
+    const c = await api('/dept/content?dept=' + id);
+    AD = { parts: deptParts(c), draft: draftBar(c) };
     renderAdminDept();
   } catch { toast('โหลดข้อมูลกองไม่สำเร็จ'); }
 }
 function renderAdminDept() {
   if (!AD) return;
   $$('#adTabs button').forEach(b => b.classList.toggle('active', b.dataset.at === adTab));
-  $('#adBody').innerHTML = adTab === 'duty'
-    ? `<h3>กำลังปฏิบัติหน้าที่ตอนนี้</h3>${dutyOnHTML(AD.duty)}<h3>ประวัติล่าสุด</h3><div class="table-wrap"><table><thead><tr><th>ชื่อ</th><th>เริ่ม</th><th>เลิก</th><th>ระยะเวลา</th></tr></thead><tbody>${dutyRowsHTML(AD.duty)}</tbody></table></div>`
-    : AD.draft + AD.parts[adTab];
+  $('#adBody').innerHTML = AD.draft + AD.parts[adTab];
 }
 
 /* ---------- 11) เริ่มทำงาน ---------- */

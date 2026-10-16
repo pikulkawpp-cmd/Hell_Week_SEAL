@@ -263,5 +263,3 @@ ul.c-list li::before{content:"";position:absolute;left:20px;top:19px;width:8px;h
 
 /* ---------- ล็อกอินกอง / หน้าของกอง ---------- */
 #divSel{width:100%}
-.duty-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 20px;margin-bottom:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
-.duty-card p{margin:0}

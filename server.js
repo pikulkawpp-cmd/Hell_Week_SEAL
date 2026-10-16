@@ -16,7 +16,6 @@
      สองไฟล์นี้ไม่เปิดให้ดาวน์โหลดตรง ส่งให้เฉพาะครูฝึกที่ล็อกอินแล้วเท่านั้น
 
    เชื่อม Google Sheet (ไม่บังคับ): SHEETS_URL, SHEETS_KEY  (ต้องใช้ Node 18+)
-   ส่งภาพรายงานเวรเข้า Discord (ไม่บังคับ): DISCORD_WEBHOOK_URL
    ข้อมูลอื่นเก็บที่ data.json และ exam-state.json (เปลี่ยนที่เก็บด้วย DATA_DIR)
    ========================================================= */
 const http = require('http');
@@ -33,10 +32,8 @@ const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const EXAM_FILE = path.join(DATA_DIR, 'exam-state.json');
-const DUTY_FILE = path.join(DATA_DIR, 'duty-log.json');
 const SHEETS_URL = process.env.SHEETS_URL || '';
 const SHEETS_KEY = process.env.SHEETS_KEY || '';
-const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL || ''; 
 const EXAM_MINUTES = Number(process.env.EXAM_MINUTES) || 45;
 const GRACE_MS = 60 * 1000;
 const MAX_BODY = 30 * 1024 * 1024;
@@ -237,66 +234,7 @@ async function saveExamResult(r) {
   await upsertRecords([rec]);
 }
 
-/* ---------- กดการทำงาน (บันทึกเวลาปฏิบัติหน้าที่ของแต่ละกอง) ---------- */
-let duty = [];
-try { duty = JSON.parse(fs.readFileSync(DUTY_FILE, 'utf8')); if (!Array.isArray(duty)) duty = []; } catch { duty = []; }
-let dutySheetOk = !!SHEETS_URL, lastDutyPull = 0;
-const persistDuty = () => { try { writeJSON(DUTY_FILE, duty); } catch {} };
-const sameName = (a, b) => norm(a).toLowerCase() === norm(b).toLowerCase();
-
-async function dutyRefresh(force) {   // Google Sheet เป็นหลัก (ถ้าเชื่อมไว้และ Apps Script รองรับ)
-  if (!SHEETS_URL || !dutySheetOk || (!force && Date.now() - lastDutyPull < 8000)) return;
-  let j;
-  try {
-    const res = await fetch(SHEETS_URL + (SHEETS_URL.includes('?') ? '&' : '?') + 'action=duty&key=' + encodeURIComponent(SHEETS_KEY), { redirect: 'follow' });
-    j = await res.json();
-  } catch (e) { throw sheetErr(e); }
-  if (!j.ok) throw sheetErr(new Error(j.error || 'sheet error'));
-  if (!Array.isArray(j.entries)) { dutySheetOk = false; console.log('  Apps Script ยังเป็นเวอร์ชันเก่า ไม่รองรับบันทึกการปฏิบัติงาน จึงเก็บไว้ที่เซิร์ฟเวอร์เท่านั้น'); return; }
-  duty = j.entries; lastDutyPull = Date.now(); persistDuty();
-}
-async function dutySave(entry) {
-  if (SHEETS_URL && dutySheetOk) {
-    try { await sheetCall({ action: 'duty_save', entries: [entry] }); }
-    catch (e) {
-      if (e.message === 'unknown action') { dutySheetOk = false; console.log('  Apps Script ยังเป็นเวอร์ชันเก่า ไม่รองรับบันทึกการปฏิบัติงาน จึงเก็บไว้ที่เซิร์ฟเวอร์เท่านั้น'); }
-      else throw e;
-    }
-  }
-  const i = duty.findIndex(x => x.id === entry.id);
-  if (i >= 0) duty[i] = entry; else duty.push(entry);
-  persistDuty();
-}
-const openDuty = (dept, name) => duty.find(x => x.dept === dept && !x.end && sameName(x.name, name));
-
-// ภาพหลักฐานเวรส่งตรงไป Discord webhook; ไม่เก็บภาพ base64 ไว้ในไฟล์ log
-function validDutyPhoto(value) {
-  if (typeof value !== 'string' || !/^data:image\/(jpeg|png|webp);base64,/i.test(value)) return null;
-  try {
-    const [head, encoded] = value.split(',', 2);
-    const buffer = Buffer.from(encoded, 'base64');
-    if (!buffer.length || buffer.length > 5 * 1024 * 1024) return null;
-    const type = head.match(/^data:(image\/(?:jpeg|png|webp));base64$/i)?.[1]?.toLowerCase();
-    return type ? { buffer, type, filename: type === 'image/png' ? 'evidence.png' : type === 'image/webp' ? 'evidence.webp' : 'evidence.jpg' } : null;
-  } catch { return null; }
-}
-async function sendDutyDiscord({ entry, action, photo }) {
-  if (!DISCORD_WEBHOOK_URL) return 'not_configured';
-  try {
-    const stamp = new Date(action === 'เลิกเวร' ? entry.end : entry.start).toLocaleString('th-TH', { timeZone: 'Asia/Bangkok' });
-    const embed = { title: `📋 รายงานการเข้าเวร SEAL — ${action}`, color: action === 'เลิกเวร' ? 0x64748b : 0x0f766e,
-      fields: [ { name: 'บุคลากร', value: String(entry.name).slice(0, 200), inline: true }, { name: 'แผนก', value: String(DEPT_DATA[entry.dept]?.name || entry.dept).slice(0, 200), inline: true }, { name: 'เวลา', value: stamp, inline: false } ],
-      image: { url: `attachment://${photo.filename}` }, footer: { text: `Hell Week SEAL · Duty ID ${entry.id}` } };
-    if (entry.end) embed.fields.push({ name: 'ระยะเวลาเวร', value: `${Math.max(0, Math.round((entry.end-entry.start)/60000))} นาที`, inline: true });
-    const form = new FormData();
-    form.append('payload_json', JSON.stringify({ embeds: [embed] }));
-    form.append('files[0]', new Blob([photo.buffer], { type: photo.type }), photo.filename);
-    const response = await fetch(DISCORD_WEBHOOK_URL, { method: 'POST', body: form });
-    return response.ok ? 'sent' : 'failed';
-  } catch (e) { console.error('Discord duty report failed:', e.message); return 'failed'; }
-}
-
-// เส้นทางของกอง: สมาชิกกองใช้ได้เฉพาะกองตัวเอง แอดมินระบุกองเองได้ (?dept= หรือใน body)
+/* ---------- เส้นทางของกอง: สมาชิกกองใช้ได้เฉพาะกองตัวเอง แอดมินระบุกองเองได้ (?dept= หรือใน body) ---------- */
 async function deptRoutes(req, res, p, url, who) {
   const admin = who.role === 'admin';
   const body = req.method === 'POST' ? await readBody(req) : {};
@@ -306,36 +244,6 @@ async function deptRoutes(req, res, p, url, who) {
 
   if (p === '/api/dept/content' && req.method === 'GET') { send(res, 200, DEPT_DATA[deptId]); return true; }
 
-  if (p === '/api/dept/duty' && req.method === 'GET') {
-    try { await dutyRefresh(false); } catch {}
-    const mine = admin ? null : openDuty(deptId, who.name) || null;
-    const inDept = duty.filter(x => x.dept === deptId);
-    send(res, 200, { dept: deptId, now: Date.now(), me: mine, onDuty: inDept.filter(x => !x.end), entries: [...inDept].sort((a, b) => b.start - a.start).slice(0, 100) });
-    return true;
-  }
-
-  if (p === '/api/dept/duty/start' && req.method === 'POST' && !admin) {
-    try { await dutyRefresh(false); } catch {}
-    if (openDuty(deptId, who.name)) { send(res, 409, { error: 'already on duty' }); return true; }
-    const photo = validDutyPhoto(body.photo);
-    if (!photo) { send(res, 400, { error: 'photo required' }); return true; }
-    const entry = { id: Date.now() + '-' + crypto.randomInt(1000, 9999), dept: deptId, name: norm(who.name), start: Date.now(), end: null, startPhoto: true };
-    await dutySave(entry);
-    const discord = await sendDutyDiscord({ entry, action: 'เริ่มเข้าเวร', photo });
-    send(res, 200, { ok: true, discord }); return true;
-  }
-
-  if (p === '/api/dept/duty/stop' && req.method === 'POST') {
-    try { await dutyRefresh(false); } catch {}
-    const e = openDuty(deptId, admin ? body.name : who.name);   // แอดมินบังคับเลิกเวรให้คนอื่นได้
-    if (!e) { send(res, 409, { error: 'not on duty' }); return true; }
-    const photo = validDutyPhoto(body.photo);
-    if (!photo) { send(res, 400, { error: 'photo required' }); return true; }
-    const updated = { ...e, end: Date.now(), endPhoto: true };
-    await dutySave(updated);
-    const discord = await sendDutyDiscord({ entry: updated, action: 'เลิกเวร', photo });
-    send(res, 200, { ok: true, discord }); return true;
-  }
   return false;
 }
 
@@ -527,5 +435,5 @@ http.createServer(async (req, res) => {
   console.log('  กองต่าง ๆ: ' + Object.values(DEPTS).map(d => d.name + (d.pass ? ' (เปิด)' : ' (ยังไม่ได้ตั้งรหัส)')).join(' | '));
   console.log(`  ห้องสอบนักเรียน: เวลาสอบ ${EXAM_MINUTES} นาที ข้อสอบ ${COURSE.EXAM.length} ข้อ`);
   console.log(SHEETS_URL ? '  โหมด: เชื่อม Google Sheet' : '  โหมด: เก็บในไฟล์ data.json (ยังไม่ได้ตั้ง SHEETS_URL)');
-  initSheets().then(() => dutyRefresh(true).catch(() => {})).then(() => console.log(''));
+  initSheets().then(() => console.log(''));
 });

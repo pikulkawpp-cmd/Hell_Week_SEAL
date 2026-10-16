@@ -8,8 +8,8 @@
     <nav id="dnav">
       <button data-dv="course" class="active">หลักสูตรเข้าแผนก</button>
       <button data-dv="rules">กฎการทำงาน</button>
-      <button data-dv="duty">กดเข้า-ออกเวร</button>
       <button data-dv="library">คลังความรู้และหน้าที่</button>
+      <button data-dv="duty" id="dDutyNav" hidden>เข้า–ออกเวร</button>
     </nav>
     <span class="mode server" id="dRole">สมาชิกกอง</span>
     <button class="btn small logout" id="dLogout">ออกจากระบบ</button>
@@ -20,20 +20,31 @@
 
     <section class="dview" id="dv-rules" hidden></section>
 
-    <section class="dview" id="dv-duty" hidden>
-      <header class="page-head"><div><h2>กดเข้า-ออกเวร</h2><p>กดเริ่มเมื่อเข้าปฏิบัติหน้าที่ และกดเลิกเมื่อออกจากเวร ระบบบันทึกเวลาให้</p></div></header>
-      <div class="duty-card" id="dutyCard"></div>
-      <h3>กำลังปฏิบัติหน้าที่ตอนนี้</h3>
-      <div id="dutyOn"></div>
-      <h3>ประวัติล่าสุดของกอง</h3>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>ชื่อ</th><th>เริ่ม</th><th>เลิก</th><th>ระยะเวลา</th></tr></thead>
-          <tbody id="dutyBody"></tbody>
-        </table>
-      </div>
-    </section>
 
     <section class="dview" id="dv-library" hidden></section>
+
+    <section class="dview" id="dv-duty" hidden>
+      <div class="panel">
+        <h2>ระบบเข้า–ออกเวรบุคลากร SEAL</h2>
+        <p class="sub">แนบภาพหลักฐานและยืนยันการเข้าเวรหรือออกเวร จากนั้นกดบันทึกภาพรายงานลงเครื่องเพื่อนำไปโพสต์ใน Discord</p>
+        <div class="notice" id="dutyStatus" role="status">ยังไม่ได้เริ่มเวร</div>
+        <label class="field">ชื่อ Roblox
+          <input id="dutyName" type="text" readonly>
+        </label>
+        <label class="field">ภาพหลักฐาน (PNG, JPG หรือ WebP)
+          <input id="dutyPhoto" type="file" accept="image/png,image/jpeg,image/webp">
+        </label>
+        <div id="dutyPreviewWrap" hidden style="margin:12px 0">
+          <img id="dutyPreview" alt="ภาพหลักฐานที่เลือก" style="max-width:100%;max-height:360px;border-radius:12px;border:1px solid #ccd5df">
+        </div>
+        <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+          <button type="button" class="btn primary" id="dutyStartBtn">ยืนยันภาพและเข้าเวร</button>
+          <button type="button" class="btn primary" id="dutyEndBtn">ยืนยันภาพและออกเวร</button>
+          <button type="button" class="btn" id="dutyDownloadBtn" hidden>บันทึกภาพรายงานลงเครื่อง</button>
+        </div>
+        <p class="sub small" id="dutyHelp">เลือกภาพหลักฐานก่อน แล้วกดปุ่มเข้าเวรหรือออกเวร ระบบจะสร้างภาพรายงานให้ดาวน์โหลด</p>
+        <canvas id="dutyCanvas" width="1200" height="900" hidden></canvas>
+      </div>
+    </section>
   </main>
 </div>
