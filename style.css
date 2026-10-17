@@ -202,7 +202,7 @@ dialog img{max-width:100%;max-height:76vh;display:block;margin:0 auto 12px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}html{scroll-behavior:auto}}
 
 /* ---------- ล็อกอิน 2 แบบ ---------- */
-.lock-tabs{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.lock-tabs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
 .lock-tabs button{background:transparent;border:0;color:var(--steel);padding:9px 6px;cursor:pointer;font-family:'Kanit';font-size:.95rem}
 .lock-tabs button.active{background:var(--signal);color:#1a0d05;font-weight:600}
 .lock-card form p{margin-bottom:2px}
@@ -263,3 +263,29 @@ ul.c-list li::before{content:"";position:absolute;left:20px;top:19px;width:8px;h
 
 /* ---------- ล็อกอินกอง / หน้าของกอง ---------- */
 #divSel{width:100%}
+.duty-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:18px 20px;margin-bottom:8px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius)}
+.duty-card p{margin:0}
+
+
+/* ---------- ธุรการ: สร้างเอกสารตามแบบ PDF ---------- */
+.doc-form{display:grid;gap:14px;background:var(--panel);border:1px solid var(--line);padding:20px;border-radius:var(--radius)}
+.doc-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.doc-actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
+.document-paper{background:#fff;color:#171717;padding:28px 34px;max-width:900px;margin:0 auto;font-family:'Sarabun',serif;min-height:900px;line-height:1.65;box-shadow:0 4px 20px #0005}
+.doc-topline{display:flex;justify-content:space-between;gap:12px;font-size:12px;border-bottom:1px solid #ddd;padding-bottom:10px}
+.doc-heading{text-align:center;margin:36px 0 26px}.doc-heading h2{font-size:19px;font-weight:600;margin-top:10px}
+.doc-body{white-space:normal;min-height:170px;font-size:16px;line-height:1.9}
+.doc-announcement{text-align:center;margin:36px 0 24px}
+.doc-sign-grid{display:grid;grid-template-columns:1fr 1fr;gap:26px 22px;text-align:center}
+.doc-sign{font-size:14px;min-height:100px}.sign-gap{height:22px}
+.doc-disclaimer{text-align:center;font-size:12px;margin-top:30px;border-top:1px solid #ddd;padding-top:12px}
+@media(max-width:700px){.lock-tabs button{font-size:.8rem;padding:8px 2px}.doc-grid{grid-template-columns:1fr}.document-paper{padding:18px;min-height:0}.doc-topline{flex-wrap:wrap}.doc-sign-grid{gap:18px 10px}}
+@media print{
+  body{background:#fff!important;color:#000!important}
+  body *{visibility:hidden!important}
+  #documentPreviewWrap,#documentPreviewWrap *{visibility:visible!important}
+  #documentPreviewWrap{display:block!important;position:absolute;left:0;top:0;width:100%;margin:0;padding:0}
+  #documentPreviewWrap .doc-actions{display:none!important}
+  .document-paper{box-shadow:none!important;margin:0!important;padding:15mm!important;max-width:none!important;min-height:0!important}
+  @page{size:A4;margin:12mm}
+}

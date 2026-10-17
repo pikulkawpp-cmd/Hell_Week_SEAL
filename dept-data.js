@@ -152,6 +152,3 @@ module.exports = {
     ] }
   }
 };
-
-// บุคลากร SEAL ใช้หลักสูตรและคลังความรู้พื้นฐานของกองรบพิเศษเป็นจุดเริ่มต้น
-module.exports.seal = { ...module.exports.special, id: 'seal', name: 'บุคลากร SEAL', entry: { ...module.exports.special.entry, title: 'หลักสูตรบุคลากร SEAL' } };

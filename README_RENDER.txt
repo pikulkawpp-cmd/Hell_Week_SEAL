@@ -1,14 +1,15 @@
-Hell Week SEAL — ตั้งค่าบน Render
+Hell Week SEAL — Render setup
 
-1) อัปโหลด/อัปเดตไฟล์โปรเจกต์นี้ใน repository ที่เชื่อมกับ Render แล้ว Deploy ใหม่
-2) Render Dashboard > Web Service > Environment เพิ่มตัวแปร:
-   HW_ADMIN_PASSWORD = รหัสผ่านแอดมิน (จำเป็น)
-   HW_PASS_SEAL = รหัสผ่านสำหรับบุคลากร SEAL (จำเป็นสำหรับเปิดล็อกอิน SEAL)
-3) กด Save Changes แล้ว Deploy หาก Render ไม่ deploy อัตโนมัติ
+Required Render environment variables:
+- HW_PASSWORD: รหัสผ่านบุคลากร/ครูฝึก
+- HW_ADMIN_PASSWORD: รหัสผ่านแอดมิน (ต้องไม่ซ้ำ HW_PASSWORD)
+- HW_PASS_OFFICE: รหัสผ่านแผนกธุรการ
+- HW_PASS_SPECIAL: รหัสผ่านแผนกรบพิเศษ
+- HW_PASS_SUPPORT: รหัสผ่านแผนกสนับสนุน
 
-การใช้งาน:
-- หน้าเข้าสู่ระบบกอง เลือก “บุคลากร SEAL” ใส่ชื่อ Roblox และรหัส HW_PASS_SEAL
-- ระบบเข้าเวรและรายงานเข้า Discord ถูกถอดออกจากเวอร์ชันนี้แล้ว
+Login screen has 4 categories: นักเรียน, บุคลากร, แผนก, แอดมิน.
+The auto-document page is available only to the ธุรการ department account. Fill in the fields and select “พิมพ์ / บันทึกเป็น PDF” to print or save as PDF.
 
-ข้อควรระวัง:
-- เก็บรหัสผ่านไว้ใน Environment Variables เท่านั้น ห้ามเผยแพร่ในแชตสาธารณะ
+Google Sheets integration (optional for existing features): SHEETS_URL and SHEETS_KEY.
+
+หมายเหตุ: เอกสารที่สร้างจากแบบฟอร์มจะอยู่ในหน้าเว็บจนกว่าจะพิมพ์/บันทึกเป็น PDF; เวอร์ชันนี้ไม่ได้บันทึกเอกสารลง Google Sheet อัตโนมัติ.

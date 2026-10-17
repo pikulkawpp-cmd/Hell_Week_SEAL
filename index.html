@@ -18,8 +18,10 @@
     <div class="lock-mark">⚓</div>
     <h1>HELL WEEK</h1>
     <div class="lock-tabs" id="lockTabs">
-      <button type="button" data-lt="student" class="active">นักเรียนเข้าสอบ</button>
-      <button type="button" data-lt="staff">เข้าสู่ระบบกอง</button>
+      <button type="button" data-lt="student" class="active">นักเรียน</button>
+      <button type="button" data-lt="personnel">บุคลากร</button>
+      <button type="button" data-lt="dept">แผนก</button>
+      <button type="button" data-lt="admin">แอดมิน</button>
     </div>
 
     <form id="studentForm" autocomplete="off">
@@ -34,23 +36,23 @@
     </form>
 
     <form id="lockForm" autocomplete="off" hidden>
-      <label>เลือกกอง
-        <select id="divSel">
-          <option value="admin">แอดมิน</option>
-          <option value="training">กองฝึก (ครูฝึก)</option>
-          <option value="office">กองธุรการ</option>
-          <option value="special">กองรบพิเศษ</option>
-          <option value="seal">บุคลากร SEAL</option>
-          <option value="support">กองสนับสนุน</option>
-        </select>
-      </label>
-      <label id="divNameWrap" hidden>ชื่อสมาชิก
-        <input id="divName" type="text" maxlength="40" autocomplete="off">
-      </label>
+      <p id="loginHint">เข้าสู่ระบบบุคลากร</p>
+      <div id="deptFields" hidden>
+        <label>เลือกแผนก
+          <select id="divSel">
+            <option value="office">ธุรการ</option>
+            <option value="special">รบพิเศษ</option>
+            <option value="support">สนับสนุน</option>
+          </select>
+        </label>
+        <label>ชื่อ Roblox / ชื่อสมาชิก
+          <input id="divName" type="text" minlength="2" maxlength="40" autocomplete="off">
+        </label>
+      </div>
       <label>รหัสผ่าน
-        <input id="lockPass" type="password" required>
+        <input id="lockPass" type="password" required autocomplete="current-password">
       </label>
-      <button class="btn primary wide" type="submit">เข้าสู่ระบบ</button>
+      <button class="btn primary wide" type="submit" id="loginSubmit">เข้าสู่ระบบ</button>
     </form>
     <p class="lock-err" id="lockErr" role="alert"></p>
   </div>

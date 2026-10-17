@@ -8,8 +8,9 @@
     <nav id="dnav">
       <button data-dv="course" class="active">หลักสูตรเข้าแผนก</button>
       <button data-dv="rules">กฎการทำงาน</button>
+      <button data-dv="duty">กดเข้า-ออกเวร</button>
       <button data-dv="library">คลังความรู้และหน้าที่</button>
-      <button data-dv="duty" id="dDutyNav" hidden>เข้า–ออกเวร</button>
+      <button data-dv="documents" id="dnavDocuments" hidden>ทำเอกสารอัตโนมัติ</button>
     </nav>
     <span class="mode server" id="dRole">สมาชิกกอง</span>
     <button class="btn small logout" id="dLogout">ออกจากระบบ</button>
@@ -20,30 +21,46 @@
 
     <section class="dview" id="dv-rules" hidden></section>
 
+    <section class="dview" id="dv-duty" hidden>
+      <header class="page-head"><div><h2>กดเข้า-ออกเวร</h2><p>กดเริ่มเมื่อเข้าปฏิบัติหน้าที่ และกดเลิกเมื่อออกจากเวร ระบบบันทึกเวลาให้</p></div></header>
+      <div class="duty-card" id="dutyCard"></div>
+      <h3>กำลังปฏิบัติหน้าที่ตอนนี้</h3>
+      <div id="dutyOn"></div>
+      <h3>ประวัติล่าสุดของกอง</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>ชื่อ</th><th>เริ่ม</th><th>เลิก</th><th>ระยะเวลา</th></tr></thead>
+          <tbody id="dutyBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="dview" id="dv-library" hidden></section>
 
-    <section class="dview" id="dv-duty" hidden>
-      <div class="panel">
-        <h2>ระบบเข้า–ออกเวรบุคลากร SEAL</h2>
-        <p class="sub">แนบภาพหลักฐานและยืนยันการเข้าเวรหรือออกเวร จากนั้นกดบันทึกภาพรายงานลงเครื่องเพื่อนำไปโพสต์ใน Discord</p>
-        <div class="notice" id="dutyStatus" role="status">ยังไม่ได้เริ่มเวร</div>
-        <label class="field">ชื่อ Roblox
-          <input id="dutyName" type="text" readonly>
-        </label>
-        <label class="field">ภาพหลักฐาน (PNG, JPG หรือ WebP)
-          <input id="dutyPhoto" type="file" accept="image/png,image/jpeg,image/webp">
-        </label>
-        <div id="dutyPreviewWrap" hidden style="margin:12px 0">
-          <img id="dutyPreview" alt="ภาพหลักฐานที่เลือก" style="max-width:100%;max-height:360px;border-radius:12px;border:1px solid #ccd5df">
+    <section class="dview" id="dv-documents" hidden>
+      <header class="page-head"><div><h2>ทำเอกสารอัตโนมัติ</h2><p>กรอกข้อมูลแล้วสร้างเอกสารตามแบบที่กำหนด สามารถพิมพ์หรือบันทึกเป็น PDF ได้</p></div></header>
+      <form id="documentForm" class="doc-form">
+        <div class="doc-grid">
+          <label>เล่มที่<input name="volume" placeholder="เช่น ๑"></label>
+          <label>ตอนที่<input name="part" placeholder="เช่น ๑"></label>
+          <label>ชื่อกรม / หน่วยงาน<input name="department" required placeholder="กรม........................"></label>
+          <label>วันที่เอกสาร<input name="issueDate" placeholder="เช่น ๑๗ ตุลาคม ๒๕๖๙"></label>
         </div>
-        <div class="actions" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
-          <button type="button" class="btn primary" id="dutyStartBtn">ยืนยันภาพและเข้าเวร</button>
-          <button type="button" class="btn primary" id="dutyEndBtn">ยืนยันภาพและออกเวร</button>
-          <button type="button" class="btn" id="dutyDownloadBtn" hidden>บันทึกภาพรายงานลงเครื่อง</button>
+        <label>เรื่อง<input name="subject" required placeholder="เรื่อง................................"></label>
+        <label>เนื้อเรื่อง<textarea name="body" rows="6" required placeholder="พิมพ์เนื้อหาเอกสารที่นี่"></textarea></label>
+        <label>ประกาศ ณ วันที่<input name="announceDate" placeholder="เช่น ๑๗ ตุลาคม พุทธศักราช ๒๕๖๙"></label>
+        <h3>ผู้ลงนาม / ผู้อนุมัติ</h3>
+        <div class="doc-grid">
+          <label>ยศ ผู้อนุมัติ 1<input name="rank1"></label><label>ชื่อผู้อนุมัติ 1<input name="name1"></label><label>ตำแหน่งผู้อนุมัติ 1<input name="position1"></label>
+          <label>ยศ ผู้อนุมัติ 2<input name="rank2"></label><label>ชื่อผู้อนุมัติ 2<input name="name2"></label><label>ตำแหน่งผู้อนุมัติ 2<input name="position2"></label>
+          <label>ยศ ผู้อนุมัติ 3<input name="rank3"></label><label>ชื่อผู้อนุมัติ 3<input name="name3"></label><label>ตำแหน่งผู้อนุมัติ 3<input name="position3"></label>
+          <label>ยศ ผู้ออกเอกสาร<input name="rank4"></label><label>ชื่อผู้ออกเอกสาร<input name="name4"></label><label>ตำแหน่งผู้ออกเอกสาร<input name="position4"></label>
         </div>
-        <p class="sub small" id="dutyHelp">เลือกภาพหลักฐานก่อน แล้วกดปุ่มเข้าเวรหรือออกเวร ระบบจะสร้างภาพรายงานให้ดาวน์โหลด</p>
-        <canvas id="dutyCanvas" width="1200" height="900" hidden></canvas>
+        <div class="doc-actions"><button class="btn primary" type="submit">สร้างเอกสารตัวอย่าง</button><button class="btn" type="reset">ล้างข้อมูล</button></div>
+      </form>
+      <div id="documentPreviewWrap" hidden>
+        <div class="doc-actions"><button class="btn primary" type="button" id="printDocument">พิมพ์ / บันทึกเป็น PDF</button></div>
+        <article id="documentPreview" class="document-paper"></article>
       </div>
     </section>
   </main>
