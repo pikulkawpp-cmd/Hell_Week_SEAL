@@ -27,7 +27,7 @@ const COURSE = require('./course-data.js');
 const DEPT_DATA = require('./dept-data.js');
 
 const PORT = process.env.PORT || 3000;
-const PASSWORD = process.env.HW_PASSWORD || '0104';
+const PASSWORD = process.env.HW_PASSWORD || '0104'; // รหัสครูฝึก
 const ADMIN_PASSWORD = process.env.HW_ADMIN_PASSWORD || '';
 const DATA_DIR = process.env.DATA_DIR || __dirname;
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
@@ -54,7 +54,7 @@ const DEPTS = {
 }
 
 const hmac = (key, text) => crypto.createHmac('sha256', key).update(text).digest('hex');
-const TOKEN = hmac('hellweek-v1', PASSWORD);
+const TOKEN = hmac('hellweek-v1', PASSWORD); // โทเคนครูฝึก
 const ADMIN_TOKEN = ADMIN_PASSWORD ? hmac('hellweek-admin-v1', ADMIN_PASSWORD) : '';
 const SIGN_KEY = hmac('hellweek-student-v1', PASSWORD + '|' + ADMIN_PASSWORD);
 const safeEq = (x, y) => { const a = Buffer.from(String(x ?? '')), b = Buffer.from(String(y ?? '')); return a.length === b.length && crypto.timingSafeEqual(a, b); };
@@ -333,9 +333,12 @@ http.createServer(async (req, res) => {
       const ip = req.socket.remoteAddress;
       const f = fails.get(ip) || { n: 0, until: 0 };
       if (Date.now() < f.until) return send(res, 429, { error: 'blocked' });
-      const { password } = await readBody(req);
+      const { password, type, name: rawName } = await readBody(req);
       if (ADMIN_PASSWORD && safeEq(password, ADMIN_PASSWORD)) { fails.delete(ip); return send(res, 200, { token: ADMIN_TOKEN, role: 'admin' }); }
-      if (safeEq(password, PASSWORD)) { fails.delete(ip); return send(res, 200, { token: TOKEN, role: 'user' }); }
+      if (type === 'trainer' && safeEq(password, PASSWORD)) {
+        fails.delete(ip);
+        return send(res, 200, { token: TOKEN, role: 'user' });
+      }
       f.n++;
       if (f.n >= 5) { f.until = Date.now() + 60000; f.n = 0; }
       fails.set(ip, f);

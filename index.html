@@ -19,7 +19,6 @@
     <h1>HELL WEEK</h1>
     <div class="lock-tabs" id="lockTabs">
       <button type="button" data-lt="student" class="active">นักเรียน</button>
-      <button type="button" data-lt="personnel">บุคลากร</button>
       <button type="button" data-lt="dept">แผนก</button>
       <button type="button" data-lt="admin">แอดมิน</button>
     </div>
@@ -36,9 +35,9 @@
     </form>
 
     <form id="lockForm" autocomplete="off" hidden>
-      <p id="loginHint">เข้าสู่ระบบบุคลากร</p>
+      <p id="loginHint">เข้าสู่ระบบแผนก</p>
       <div id="deptFields" hidden>
-        <label>เลือกแผนก
+        <label id="deptSelectLabel">เลือกแผนก
           <select id="divSel">
             <option value="office">ธุรการ</option>
             <option value="special">รบพิเศษ</option>

@@ -133,17 +133,19 @@ async function onLogin(e) {
   if (Date.now() < lockedUntil) { $('#lockErr').textContent = `ลองผิดหลายครั้ง รออีก ${Math.ceil((lockedUntil - Date.now()) / 1000)} วินาที`; return; }
 
   let res = null;
-  const category = $('#lockTabs button.active')?.dataset.lt || 'personnel';
+  const category = $('#lockTabs button.active')?.dataset.lt || 'student';
   const division = $('#divSel').value;
   const trainerLogin = category === 'dept' && division === 'trainer';
   const url = category === 'dept' && !trainerLogin ? '/api/dept/login' : '/api/login';
-  const payload = category === 'dept' && !trainerLogin ? { password: pass, dept: division, name: $('#divName').value.trim() } : { password: pass };
+  const payload = category === 'dept' && !trainerLogin
+    ? { password: pass, dept: division, name: $('#divName').value.trim() }
+    : { password: pass, type: trainerLogin ? 'trainer' : category };
   try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
 
   if (res && res.ok) {
     const d = await res.json();
-    if ((category === 'admin' && d.role !== 'admin') || ((category === 'personnel' || trainerLogin) && d.role !== 'user') || (category === 'dept' && !trainerLogin && d.role !== 'dept')) {
-      $('#lockErr').textContent = category === 'admin' ? 'รหัสนี้ไม่ใช่รหัสแอดมิน' : category === 'personnel' ? 'รหัสนี้ไม่ใช่รหัสบุคลากร' : 'ข้อมูลเข้าสู่ระบบแผนกไม่ถูกต้อง';
+    if ((category === 'admin' && d.role !== 'admin') || (trainerLogin && d.role !== 'user') || (category === 'dept' && !trainerLogin && d.role !== 'dept')) {
+      $('#lockErr').textContent = category === 'admin' ? 'รหัสนี้ไม่ใช่รหัสแอดมิน' : 'ข้อมูลเข้าสู่ระบบไม่ถูกต้อง';
       return;
     }
     TOKEN = d.token; ROLE = d.role === 'admin' ? 'admin' : d.role === 'dept' ? 'dept' : 'user';
@@ -1033,9 +1035,12 @@ $$('#lockTabs button').forEach(b => b.addEventListener('click', () => {
   $('#studentForm').hidden = category !== 'student';
   $('#lockForm').hidden = category === 'student';
   $('#deptFields').hidden = category !== 'dept';
-  $('#divName').required = category === 'dept';
-  $('#loginHint').textContent = ({personnel:'เข้าสู่ระบบบุคลากร', dept:'เข้าสู่ระบบแผนก', admin:'เข้าสู่ระบบแอดมิน'})[category] || '';
-  $('#loginSubmit').textContent = category === 'dept' ? 'เข้าสู่ระบบแผนก' : 'เข้าสู่ระบบ';
+  $('#deptSelectLabel').hidden = category !== 'dept';
+  const trainerSelected = category === 'dept' && $('#divSel').value === 'trainer';
+  $('#divName').closest('label').hidden = trainerSelected || category === 'admin';
+  $('#divName').required = category === 'dept' && !trainerSelected;
+  $('#loginHint').textContent = ({dept:'เข้าสู่ระบบแผนก', admin:'เข้าสู่ระบบแอดมิน'})[category] || ''; 
+  $('#loginSubmit').textContent = category === 'dept' ? (trainerSelected ? 'เข้าสู่ระบบครูฝึก' : 'เข้าสู่ระบบแผนก') : 'เข้าสู่ระบบ';
   $('#lockPass').value = '';
   $('#lockErr').textContent = '';
 }));
@@ -1045,6 +1050,7 @@ $('#divSel').addEventListener('change', () => {
   $('#divName').required = !isTrainerDept;
   $('#divName').closest('label').hidden = isTrainerDept;
   $('#loginHint').textContent = isTrainerDept ? 'เข้าสู่ระบบครูฝึกด้วยรหัสครูฝึก' : 'เข้าสู่ระบบแผนก';
+  $('#deptSelectLabel').hidden = false;
   $('#loginSubmit').textContent = isTrainerDept ? 'เข้าสู่ระบบครูฝึก' : 'เข้าสู่ระบบแผนก';
 });
 $('#lockForm').addEventListener('submit', onLogin);
