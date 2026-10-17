@@ -135,13 +135,14 @@ async function onLogin(e) {
   let res = null;
   const category = $('#lockTabs button.active')?.dataset.lt || 'personnel';
   const division = $('#divSel').value;
-  const url = category === 'dept' ? '/api/dept/login' : '/api/login';
-  const payload = category === 'dept' ? { password: pass, dept: division, name: $('#divName').value.trim() } : { password: pass };
+  const trainerLogin = category === 'dept' && division === 'trainer';
+  const url = category === 'dept' && !trainerLogin ? '/api/dept/login' : '/api/login';
+  const payload = category === 'dept' && !trainerLogin ? { password: pass, dept: division, name: $('#divName').value.trim() } : { password: pass };
   try { res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }); } catch {}
 
   if (res && res.ok) {
     const d = await res.json();
-    if ((category === 'admin' && d.role !== 'admin') || (category === 'personnel' && d.role !== 'user') || (category === 'dept' && d.role !== 'dept')) {
+    if ((category === 'admin' && d.role !== 'admin') || ((category === 'personnel' || trainerLogin) && d.role !== 'user') || (category === 'dept' && !trainerLogin && d.role !== 'dept')) {
       $('#lockErr').textContent = category === 'admin' ? 'รหัสนี้ไม่ใช่รหัสแอดมิน' : category === 'personnel' ? 'รหัสนี้ไม่ใช่รหัสบุคลากร' : 'ข้อมูลเข้าสู่ระบบแผนกไม่ถูกต้อง';
       return;
     }
@@ -1038,6 +1039,14 @@ $$('#lockTabs button').forEach(b => b.addEventListener('click', () => {
   $('#lockPass').value = '';
   $('#lockErr').textContent = '';
 }));
+$('#divSel').addEventListener('change', () => {
+  if ($('#lockTabs button.active')?.dataset.lt !== 'dept') return;
+  const isTrainerDept = $('#divSel').value === 'trainer';
+  $('#divName').required = !isTrainerDept;
+  $('#divName').closest('label').hidden = isTrainerDept;
+  $('#loginHint').textContent = isTrainerDept ? 'เข้าสู่ระบบครูฝึกด้วยรหัสครูฝึก' : 'เข้าสู่ระบบแผนก';
+  $('#loginSubmit').textContent = isTrainerDept ? 'เข้าสู่ระบบครูฝึก' : 'เข้าสู่ระบบแผนก';
+});
 $('#lockForm').addEventListener('submit', onLogin);
 $('#studentForm').addEventListener('submit', onStudentLogin);
 $('#sLogout').addEventListener('click', logout);
